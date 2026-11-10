@@ -22,7 +22,7 @@ import secrets
 import time
 import uuid
 from datetime import date, datetime, timedelta, timezone
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 import psycopg
 from psycopg_pool import ConnectionPool
@@ -44,7 +44,7 @@ EVENT_COLORS = {'초록색':'#6c8764','빨간색':'#cc5757','주황색':'#c78c66
 def event_color_name(value):
     return next((name for name,code in EVENT_COLORS.items() if code==value),'초록색')
 
-QUESTIONS = ['오늘 가장 즐거웠던 순간은?','요즘 가장 고마운 사람은?','최근 가장 기억에 남는 일은?','가족과 함께 가고 싶은 장소는?','오늘 나의 기분을 한 단어로 표현한다면?','오늘 나에게 필요한 응원은?','이번 주 함께 하고 싶은 일은?','어릴 때 가장 좋아했던 음식은?','가족에게 고맙다고 말하고 싶은 일은?','내일 기대하는 일은?','오늘 새롭게 알게 된 것은?','요즘 나를 편안하게 하는 것은?','함께 다시 가보고 싶은 곳은?','이번 달 작은 목표는?','나에게 소중한 일상의 순간은?','최근 가장 많이 웃었던 일은?','가족에게 추천하고 싶은 노래는?','오늘 나를 칭찬하고 싶은 일은?','함께 배우고 싶은 것은?','오늘 가장 맛있었던 음식은?','가족에게 들려주고 싶은 추억은?','지금 떠오르는 소원은?','이번 주 나를 도와준 사람은?','최근 보고 싶은 사람은?','함께 만들고 싶은 전통은?','쉬는 날 하고 싶은 것은?','최근 가장 뿌듯했던 일은?','가족과 나누고 싶은 작은 발견은?','오늘 듣고 싶은 말은?','이번 주 가족에게 해주고 싶은 일은?','오늘의 하루에 제목을 붙인다면?']
+QUESTIONS = ['오늘 가장 웃음 났던 순간은?', '오늘 가장 맛있게 먹은 것은?', '오늘 나에게 해주고 싶은 말은?', '오늘 예상보다 잘 풀린 일은?', '오늘 잠시 쉬어 간 순간은?', '오늘 새롭게 알게 된 것은?', '오늘 눈에 들어온 풍경은?', '오늘 가장 많이 쓴 말은?', '오늘 고마웠던 작은 친절은?', '오늘 내 기분을 날씨로 표현한다면?', '오늘 가장 편안했던 장소는?', '오늘 나를 움직이게 한 것은?', '오늘 다시 하고 싶은 순간은?', '오늘 덜어내고 싶은 걱정은?', '오늘 처음 해본 일이 있나요?', '오늘 누군가에게 건넨 좋은 말은?', '오늘 듣고 싶었던 말은?', '오늘 뜻밖에 반가웠던 것은?', '오늘 나를 칭찬할 일 하나는?', '오늘 기다려졌던 시간은?', '오늘 귀에 남은 소리는?', '오늘 본 것 중 예뻤던 것은?', '오늘 하루에 제목을 붙인다면?', '오늘 혼자 즐긴 작은 행복은?', '오늘 가장 집중했던 일은?', '오늘 계획과 달랐던 일은?', '오늘 나를 도와준 사람은?', '오늘 가족에게 전할 소식은?', '오늘 잘 참아낸 일은?', '오늘 하루를 색으로 표현한다면?', '오늘 밤 편히 쉬려면 무엇이 필요할까요?', '어릴 때 즐겨 하던 놀이는?', '어릴 때 가장 좋아한 간식은?', '처음 살던 집에서 기억나는 것은?', '학창 시절 기억에 남는 선생님은?', '처음 혼자 해내서 뿌듯했던 일은?', '어릴 때 자주 듣던 말은?', '옛날 우리 동네의 특별한 장소는?', '어릴 때 갖고 싶었던 물건은?', '처음 여행 갔던 곳의 기억은?', '잊히지 않는 소풍의 장면은?', '어릴 때의 나에게 묻고 싶은 것은?', '예전에 좋아했던 노래는?', '가장 기억에 남는 생일은?', '오래된 사진 중 다시 보고 싶은 것은?', '어릴 때 무서웠지만 지금은 괜찮은 것은?', '처음 용돈으로 산 것은?', '옛 친구와 다시 만나면 하고 싶은 이야기는?', '기억 속 가장 따뜻했던 겨울은?', '어릴 때 가족과 보낸 주말은 어땠나요?', '처음 배운 요리는 무엇인가요?', '지금도 기억하는 옛날 냄새는?', '어릴 때 좋아한 책이나 만화는?', '처음 해본 아르바이트나 집안일은?', '가족에게 물려받은 물건이 있나요?', '잊지 못하는 운동회 장면은?', '예전에는 흔했지만 지금은 그리운 것은?', '어린 시절 나만의 비밀 장소는?', '어릴 때 생각한 어른의 모습은?', '다시 방문하고 싶은 옛 장소는?', '가족에게 처음 들려주는 옛 추억은?', '지금의 나를 만든 작은 경험은?', '비 오는 날 먹고 싶은 음식은?', '나를 기분 좋게 하는 색은?', '쉬는 날 먼저 찾는 옷은?', '평생 한 가지 간식만 고른다면?', '아침형과 저녁형 중 나는 어느 쪽인가요?', '집에서 가장 좋아하는 자리는?', '다시 보고 싶은 영화는?', '기분 전환에 잘 맞는 음악은?', '좋아하는 계절의 구체적인 이유는?', '산과 바다 중 지금 가고 싶은 곳은?', '향기 중 가장 편안한 것은?', '내 입맛을 한 문장으로 소개한다면?', '남들은 좋아하지만 나는 어려운 음식은?', '가족에게 추천하고 싶은 책은?', '붐비는 곳과 조용한 곳 중 어디가 좋나요?', '요즘 자주 보는 영상 주제는?', '식탁에 꼭 있었으면 하는 반찬은?', '여행 숙소에서 가장 중요하게 보는 것은?', '휴대전화 없이 즐길 수 있는 취미는?', '내가 좋아하는 산책길은?', '따뜻한 음료와 차가운 음료 중 오늘의 선택은?', '나만의 라면 조리법이 있나요?', '선물로 받으면 반가운 실용품은?', '좋아하는 옷의 소재나 촉감은?', '한 번쯤 배워 보고 싶은 악기는?', '가족과 함께 보고 싶은 공연은?', '내가 좋아하는 사진의 분위기는?', '휴일에 늦잠과 일찍 외출 중 무엇이 좋나요?', '지금 집에 들이고 싶은 식물은?', '취향이 바뀐 음식이나 물건은?', '가족이 잘 모를 내 취향 하나는?', '최근 가족에게 고마웠던 일은?', '말없이 챙겨 줘서 고마웠던 것은?', '고마움을 표현하기 편한 방법은?', '요즘 자주 도움받는 일은?', '이번 주 누구를 도와주고 싶나요?', '가족의 어떤 습관이 든든한가요?', '가족에게 받아 오래 기억하는 말은?', '함께 살아서 편리한 순간은?', '가족 덕분에 새롭게 배운 것은?', '평소 당연하게 여겼던 수고는?', '이번 달 가장 고마운 지출은?', '오늘 사용할 수 있어 감사한 물건은?', '지금의 일상에서 지키고 싶은 것은?', '나를 기다려 준 사람에게 하고 싶은 말은?', '최근 양보받아 고마웠던 일은?', '맛있는 한 끼를 함께하고 싶은 사람은?', '가족 중 누구의 장점을 배우고 싶나요?', '칭찬하고 싶은 가족의 작은 행동은?', '어려울 때 기억나는 응원은?', '집에서 누가 하는 어떤 일이 도움이 되나요?', '고마움을 담은 메모를 쓴다면 첫 문장은?', '최근 웃게 해준 사람은?', '누군가의 배려를 뒤늦게 깨달은 적이 있나요?', '함께 축하하고 싶은 가족의 일은?', '가족에게 받은 선물 중 자주 쓰는 것은?', '내가 해줄 수 있는 작은 배려는?', '최근 잘했다고 말해주고 싶은 사람은?', '나를 있는 그대로 받아준 순간은?', '우리 가족이 함께 견뎌 낸 일은?', '이번 주 고맙다는 말을 꼭 전하고 싶은 일은?', '우리 집에서 가장 아늑한 곳은?', '가족이 함께 정리하고 싶은 공간은?', '집에서 바꾸면 편해질 작은 것은?', '함께 먹고 싶은 주말 아침 메뉴는?', '집안일 중 내가 비교적 편한 것은?', '집안일 중 도움받고 싶은 것은?', '우리 집에서 자주 사라지는 물건은?', '냉장고에서 먼저 먹어야 할 음식은?', '우리 집만의 특별한 냄새는?', '집에 돌아와 가장 먼저 하는 일은?', '우리 가족의 아침은 어떤 분위기인가요?', '집에서 조용했으면 하는 시간은?', '함께 키워 보고 싶은 식물이 있나요?', '우리 집에 이름을 붙인다면?', '가족 식탁에 새로 추가할 음식은?', '자주 쓰는 물건의 자리를 바꾼다면?', '우리 집에서 고치고 싶은 불편은?', '손님에게 소개하고 싶은 집의 한 부분은?', '이번 주 나눠 맡으면 좋을 일은?', '집에서 가장 오래 함께한 물건은?', '가족과 함께 만들고 싶은 장식은?', '집 안에서 휴대전화를 쉬게 둘 곳은?', '우리 집에서 아끼고 싶은 자원은?', '함께 해보고 싶은 대청소 방식은?', '서로 방해하지 않고 쉬는 방법은?', '집에 꼭 비축해 두는 물건은?', '우리 집 식사 시간에 더할 작은 즐거움은?', '가족 공용 공간에 두고 싶은 것은?', '집에서 들리는 소리 중 좋아하는 것은?', '우리 집만의 규칙 하나를 만든다면?', '오늘 집을 편안하게 만들 행동 하나는?', '하루 여행을 떠난다면 어디로 갈까요?', '가족과 함께 걸어 보고 싶은 길은?', '여행 가방에 꼭 넣는 물건은?', '가족 여행에서 맡고 싶은 역할은?', '여행 중 계획과 즉흥 중 어느 쪽인가요?', '우리 동네에서 함께 가볼 곳은?', '기차를 타고 가보고 싶은 곳은?', '여행에서 가장 기억에 남는 식사는?', '가족과 함께 보고 싶은 자연 풍경은?', '다시 묵고 싶은 숙소가 있나요?', '가까운 곳에서 피크닉한다면 무엇을 챙길까요?', '여행 중 꼭 사진을 찍는 대상은?', '가족과 함께 타보고 싶은 교통수단은?', '여행 일정에 쉬는 시간을 얼마나 넣고 싶나요?', '동네 사람에게 추천할 장소는?', '가족과 가고 싶은 시장은?', '처음 가는 도시에서 가장 먼저 할 일은?', '겨울에 함께 떠나고 싶은 곳은?', '여름에 더위를 피하고 싶은 장소는?', '우리 가족에게 맞는 여행 기간은?', '여행 예산에서 가장 중요하게 쓸 항목은?', '길을 잃었을 때 나는 어떻게 하나요?', '가족 여행에서 해보고 싶은 새로운 경험은?', '사진으로만 봤지만 직접 보고 싶은 곳은?', '집 근처에서 발견한 숨은 장소는?', '여행에서 사온 것 중 잘 쓰는 것은?', '가족과 일출과 일몰 중 무엇을 보고 싶나요?', '차 안에서 함께 듣고 싶은 노래는?', '다음 여행에서 생략하고 싶은 것은?', '여행 후 가족과 나누고 싶은 기록 방식은?', '지칠 때 나에게 도움이 되는 것은?', '혼자 쉬고 싶을 때 어떻게 알려주면 좋을까요?', '기분이 좋지 않을 때 듣고 싶지 않은 말은?', '누군가 내 이야기를 들어준다고 느끼는 순간은?', '조언과 공감 중 오늘 필요한 것은?', '내가 편히 말할 수 있는 분위기는?', '요즘 나를 설레게 하는 작은 일은?', '걱정이 많을 때 정리하는 방법은?', '마음이 편안해지는 일상 동작은?', '기분 전환에 필요한 시간은 어느 정도인가요?', '나를 웃게 하는 가족의 모습은?', '최근 안도했던 순간은?', '기운이 없을 때 부탁하고 싶은 도움은?', '좋은 소식은 어떻게 전하는 편인가요?', '속상한 일을 말하기 전에 필요한 것은?', '함께 있어도 혼자만의 시간이 필요한 때는?', '오늘 내 에너지를 다섯 칸으로 표현한다면?', '부담 없이 거절할 때 쓰고 싶은 문장은?', '가족이 내 상태를 알아차리는 신호는?', '나에게 휴식과 게으름은 어떻게 다른가요?', '스스로에게 너무 엄격했던 일은?', '최근 마음을 가볍게 해준 선택은?', '대화 중 잠시 쉬고 싶을 때 쓸 신호는?', '좋아하는 사람에게 응원받고 싶은 방식은?', '내가 진정됐다는 걸 알 수 있는 신호는?', '힘든 날 먹으면 위로되는 음식은?', '오늘 마음속에서 가장 큰 자리를 차지한 것은?', '최근 생각보다 괜찮았던 일은?', '서운함을 차분히 말할 때 필요한 것은?', '가족이 나를 위해 하지 않아도 되는 일은?', '내일의 마음을 위해 오늘 덜어낼 일은?', '지금 배우고 싶은 생활 기술은?', '가족에게 가르쳐 줄 수 있는 것은?', '최근 사용법을 새로 익힌 물건은?', '처음에는 어려웠지만 익숙해진 것은?', '올해 조금 나아졌다고 느끼는 점은?', '실수 덕분에 알게 된 것은?', '가족과 함께 들어보고 싶은 수업은?', '다시 도전하고 싶은 취미는?', '배울 때 설명과 직접 해보기 중 무엇이 좋나요?', '요즘 궁금해서 찾아본 것은?', '내가 잘하는 일의 시작은 어땠나요?', '한 달 동안 연습해 보고 싶은 것은?', '가족에게 물어보고 싶은 요령은?', '새로운 기기를 배울 때 어려운 점은?', '학교 밖에서 배운 중요한 것은?', '일하면서 생긴 유용한 습관은?', '한때 못했지만 지금은 할 수 있는 것은?', '책 한 권에서 기억에 남은 생각은?', '최근 바뀐 나의 생각은?', '다른 세대에게 배우고 싶은 것은?', '가족과 서로 교환할 재능은?', '작게 시작할 수 있는 목표는?', '목표를 잊지 않게 하는 방법은?', '도움 요청이 필요하다는 신호는?', '오늘 한 가지 질문을 전문가에게 한다면?', '낯선 일을 시도할 때 든든한 지원은?', '일주일만 체험하고 싶은 일은?', '나만의 문제 해결 요령은?', '잘한 결과보다 즐거웠던 과정은?', '포기 대신 방법을 바꿔본 경험은?', '새로 배운 것을 가족과 나눌 방법은?', '가족과 30분이 생기면 하고 싶은 일은?', '함께 요리한다면 어떤 메뉴가 좋을까요?', '가족사진은 어떤 분위기로 찍고 싶나요?', '함께 해보고 싶은 보드게임은?', '가족끼리 작은 대회를 연다면 종목은?', '주말에 같이 만들고 싶은 것은?', '가족과 참여하고 싶은 동네 행사는?', '함께 걷는다면 누구의 속도에 맞출까요?', '가족 영화의 밤에 준비할 것은?', '함께 실천할 작은 친환경 행동은?', '가족끼리 서로 추천해 줄 음식은?', '집에서 열어보고 싶은 작은 파티는?', '함께 듣고 싶은 가족의 옛이야기는?', '가족끼리 하루 역할을 바꾼다면?', '동네에서 함께 봉사할 일이 있을까요?', '가족 운동을 고른다면 어떤 게 좋나요?', '함께 완성하고 싶은 퍼즐이나 만들기는?', '가족과 제철 음식을 먹는다면 무엇일까요?', '올해 함께 가보고 싶은 문화 공간은?', '함께 정리할 사진은 어떤 때의 사진인가요?', '가족 산책에 이름을 붙인다면?', '각자 한 곡씩 고르는 재생목록의 첫 곡은?', '가족끼리 배달 없이 한 끼를 만든다면?', '함께 시장에 가면 내가 고를 것은?', '가족에게 소개하고 싶은 나의 취미는?', '서로에게 작은 선물을 만든다면?', '가족 독서 시간에 각자 고를 책은?', '함께하는 날 휴대전화는 어떻게 둘까요?', '가족 버킷리스트에서 가장 먼저 할 일은?', '이번 달 함께한 일을 어떻게 기념할까요?', '나에게 좋은 하루의 기준은?', '돈을 쓰고 만족스러웠던 경험은?', '시간을 아껴서 하고 싶은 것은?', '생활에서 꼭 지키고 싶은 약속은?', '가족에게 신뢰받는다고 느끼는 순간은?', '나에게 충분하다는 것은 어떤 뜻인가요?', '바쁘더라도 놓치고 싶지 않은 것은?', '가족 사이 공평함은 어떻게 느끼나요?', '내가 중요하게 여기는 예의는?', '다른 의견을 들을 때 도움이 되는 태도는?', '선물을 고를 때 가장 생각하는 것은?', '나에게 오래 쓰는 물건의 가치는?', '가족과 결정할 때 먼저 듣고 싶은 의견은?', '성공보다 더 중요하다고 느끼는 것은?', '편리함과 익숙함 중 최근 고른 것은?', '아끼는 것과 참는 것은 어떻게 다른가요?', '나에게 좋은 이웃은 어떤 사람인가요?', '가족이 서로 존중하는 작은 행동은?', '약속을 바꿔야 할 때 어떻게 말하면 좋을까요?', '내가 생각하는 어른스러움은?', '가족에게 물려주고 싶은 태도는?', '오래 지키고 있는 나만의 원칙은?', '생각이 달라도 함께할 수 있는 방법은?', '소비하기 전에 스스로 묻는 질문은?', '나에게 여유가 있다는 신호는?', '칭찬받는다면 어떤 노력을 알아주면 좋나요?', '함께 사는 데 가장 필요한 배려는?', '나답다고 느끼는 선택은?', '최근 중요성의 순서가 바뀐 것은?', '가족이 서로 비교하지 않았으면 하는 것은?', '나에게 잘 산 하루란 어떤 하루인가요?', '내년 이맘때 기대하는 장면은?', '미래의 나에게 남기고 싶은 한 문장은?', '가족과 새로 만들고 싶은 전통은?', '나중에도 계속 하고 싶은 취미는?', '앞으로 살아보고 싶은 동네는?', '언젠가 도전할 작은 꿈은?', '미래의 집에 꼭 있었으면 하는 공간은?', '가족과 10년 뒤 다시 보고 싶은 사진은?', '나중에 시간을 더 쓰고 싶은 일은?', '내년 가족사진에 담고 싶은 모습은?', '미래의 나에게 보내고 싶은 물건은?', '다음 생일에 해보고 싶은 일은?', '언젠가 가족에게 해주고 싶은 요리는?', '나이가 들어도 간직하고 싶은 습관은?', '앞으로 줄이고 싶은 생활의 번거로움은?', '오래 건강하게 즐기고 싶은 활동은?', '가족과 함께 모아보고 싶은 것은?', '미래의 손님에게 들려줄 우리 집 이야기는?', '앞으로 자주 만나고 싶은 사람은?', '한 해 뒤 지금을 떠올리면 기억할 것은?', '나중에 꼭 정리해 두고 싶은 기록은?', '미래 편지를 열어볼 날짜를 고른다면?', '앞으로 가족에게 더 자주 하고 싶은 말은?', '가족과 완성하고 싶은 장기 목표는?', '미래에 배우고 싶은 새로운 기술은?', '한 달 후 나에게 기대하는 작은 변화는?', '다가오는 계절에 준비하고 싶은 것은?', '나중에 돌아보며 잘했다고 느낄 선택은?', '가족과 함께 지켜가고 싶은 풍경은?', '오늘 시작하면 미래에 고마울 일은?', '가족이 가게를 연다면 무엇을 팔까요?', '우리 가족을 영화로 만들면 제목은?', '하루 동안 동물과 이야기한다면 무엇을 물을까요?', '우리 집에 비밀 방이 생긴다면 용도는?', '순간이동을 한 번 한다면 어디로 갈까요?', '가족이 탐험대라면 내가 맡을 역할은?', '우리 가족의 상징 나무를 고른다면?', '한 끼를 유명 요리사에게 부탁한다면 메뉴는?', '가족 캐릭터에게 새 능력을 준다면?', '달에 가져갈 가족 물건 하나는?', '가족끼리 라디오를 하면 첫 주제는?', '우리 집을 우표로 만들면 어떤 그림일까요?', '하루 동안 다른 시대를 방문한다면?', '기억 한 장면을 그림으로 남긴다면?', '우리 가족 전용 공휴일을 만든다면?', '내일 갑자기 하루 휴가가 생긴다면?', '가족에게 어울리는 여행 차량은?', '우리 집 식탁이 말을 한다면 무슨 말을 할까요?', '추억을 향수로 만든다면 어떤 향일까요?', '가족이 팀이 되어 퀴즈를 푼다면 자신 있는 분야는?', '우리 가족의 응원 구호를 만든다면?', '오늘의 기분을 음식으로 표현한다면?', '가족과 작은 축제를 연다면 이름은?', '하루 동안 투명해지면 구경하고 싶은 곳은?', '함께 무인도에 가져갈 생활 도구는?', '가족의 추억 박물관에 놓을 첫 전시물은?', '평범한 하루를 특별하게 만드는 마법은?', '우리 가족의 다음 장 제목은?', '다음 1년에도 가족과 계속 나누고 싶은 질문은?']
 CSS = '''<style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap');
 html,body,[class*="css"],.stApp,button,input,textarea {font-family:'Noto Sans KR',sans-serif!important;}
@@ -81,6 +81,21 @@ header[data-testid="stHeader"]{background:transparent}#MainMenu,footer{visibilit
 .st-key-clickcalendar button[kind="primary"] p{color:white!important}
 .calendar-weekday{text-align:center;font-size:13px;font-weight:600;padding:5px 0}
 .calendar-dots{text-align:center;font-size:11px;line-height:14px;min-height:14px;letter-spacing:1px;margin-top:-6px}
+
+@keyframes lumora-launch{0%{opacity:0;transform:scale(.82);filter:blur(2px)}25%{opacity:1;filter:blur(0)}75%{opacity:1;transform:scale(1.04)}100%{opacity:0;transform:scale(1.14);filter:blur(0)}}
+.lumora-launch{animation:lumora-launch 3s cubic-bezier(.22,.61,.36,1) both;will-change:transform,opacity}
+@media(prefers-reduced-motion:reduce){.lumora-launch{animation:none!important;opacity:1!important;transform:none!important}}
+
+.st-key-monthnav [data-testid="stHorizontalBlock"]{flex-wrap:nowrap!important;gap:4px!important;align-items:center}
+.st-key-monthnav [data-testid="stColumn"]{min-width:0!important}
+.st-key-monthnav [data-testid="stColumn"]:nth-child(1),.st-key-monthnav [data-testid="stColumn"]:nth-child(3){flex:1!important;width:16%!important}
+.st-key-monthnav [data-testid="stColumn"]:nth-child(2){flex:4!important;width:66%!important}
+.month-heading{text-align:center;font-size:19px;font-weight:700;padding:6px 0;color:#435d4a}
+.st-key-clickcalendar button{min-height:34px!important;height:34px!important}
+.st-key-clickcalendar [data-testid="stVerticalBlock"]{gap:1px!important}
+.st-key-clickcalendar{margin-top:0!important}
+.calendar-weekday{padding:2px 0!important}
+.calendar-dots{margin-top:0!important;line-height:10px!important;min-height:10px!important;font-size:9px!important}
 </style>'''
 st.markdown(CSS, unsafe_allow_html=True)
 
@@ -183,6 +198,14 @@ def delete_item(collection,ident):
         del data[collection][ident]
     mutate(action);st.rerun()
 
+def app_share_url():
+    raw=st.session_state.get('qr_app_url',st.secrets.get('APP_URL','')).strip()
+    parsed=urlsplit(raw)
+    host=(parsed.hostname or '').lower()
+    if parsed.scheme!='https' or not host or parsed.username or parsed.password or any(x in host for x in ['your-app','yourapp','our-app','example','localhost']):
+        return None
+    return urlunsplit((parsed.scheme,parsed.netloc,parsed.path.rstrip('/'),'',''))
+
 def qr_download(url,label):
     im=qrcode.make(url); buf=io.BytesIO(); im.save(buf,format='PNG')
     st.image(buf.getvalue(),width=180)
@@ -223,7 +246,7 @@ except Exception:
 cookies=CookieController()
 if not st.session_state.get('splash_done'):
     splash=st.empty()
-    splash.markdown('<div style="position:fixed;inset:0;z-index:99999;background:#faf7ef;display:grid;place-items:center"><div class="brand" style="font-size:42px">LUMORA</div></div>',unsafe_allow_html=True)
+    splash.markdown('<div style="position:fixed;inset:0;z-index:99999;background:#faf7ef;display:grid;place-items:center"><div class="brand lumora-launch" style="font-size:42px">LUMORA</div></div>',unsafe_allow_html=True)
     time.sleep(3);splash.empty();st.session_state['splash_done']=True
     # Cookie component needs a mounted client render before restoration.
     st.rerun()
@@ -241,6 +264,7 @@ if not user:
         with st.form('account_login'):
             nickname=st.text_input('이름 / 별명',max_chars=20).strip()
             password=st.text_input('비밀번호',type='password',max_chars=128)
+            family_hint=st.text_input('가족 초대 코드 (이름·비밀번호가 다른 계정과 같을 때만)',max_chars=80).strip()
             remember=st.checkbox('로그인 유지',value=True)
             submit=st.form_submit_button('로그인',use_container_width=True)
         if submit:
@@ -251,6 +275,10 @@ if not user:
                 locked=count>=8 and datetime.now(timezone.utc)-last<timedelta(minutes=15)
                 rows=c.execute('SELECT id,password FROM public.lumora_users WHERE lower(name)=lower(%s)',(nickname,)).fetchall() if not locked else []
                 matches=[r for r in rows if verify(password,r[1])]
+                if family_hint and matches:
+                    candidates=c.execute('SELECT u.id FROM public.lumora_users u JOIN public.lumora_families f ON u.family=f.id WHERE f.invite=%s',(digest(family_hint),)).fetchall()
+                    allowed={r[0] for r in candidates}
+                    matches=[r for r in matches if r[0] in allowed]
                 valid=len(matches)==1
                 if valid:
                     token=secrets.token_urlsafe(48)
@@ -264,10 +292,10 @@ if not user:
                 if remember:
                     cookies.set('lumora_session',token,max_age=2592000,secure=True,same_site='strict');time.sleep(.3)
                 st.rerun()
-            else:st.error('이름과 비밀번호를 확인해 주세요. 반복 실패 시 15분간 제한됩니다.')
+            else:st.error('이름과 비밀번호를 확인해 주세요. 같은 이름·비밀번호 계정이 여러 개라면 가족 초대 코드도 입력해 주세요. 반복 실패 시 15분간 제한됩니다.')
     with signup:
         with st.form('account_signup'):
-            nickname=st.text_input('이름 / 별명',max_chars=20,help='로그인에 사용할 고유한 별명을 정해 주세요.').strip()
+            nickname=st.text_input('이름 / 별명',max_chars=20,help='가족이 알아볼 수 있는 이름을 입력해 주세요. 다른 가족과 겹쳐도 됩니다.').strip()
             blood=st.selectbox('혈액형',['A','B','O','AB'])
             st.caption('캐릭터 외형 선택에만 사용하며 성격과 무관합니다.')
             password=st.text_input('비밀번호 · 8자 이상',type='password',max_chars=128)
@@ -281,7 +309,7 @@ if not user:
             else:
                 with db() as c:
                     c.execute("SELECT pg_advisory_xact_lock(hashtext(%s))",('lumora_name:'+nickname.casefold(),))
-                    duplicate=c.execute('SELECT id FROM public.lumora_users WHERE lower(name)=lower(%s)',(nickname,)).fetchone()
+                    duplicate=False  # Display names may repeat; account IDs remain unique.
                     if not duplicate:
                         fid=key();uid=key()
                         c.execute('INSERT INTO public.lumora_families VALUES(%s,%s,%s,%s)',(fid,'가족 연결 대기',digest(secrets.token_urlsafe(24)),Jsonb({'onboarding':True})))
@@ -331,8 +359,7 @@ if pending:
 try:
     family_name,data,members=family_data(user)
     if 'new_invite' in st.session_state:
-        st.info('가족 초대 코드입니다. 안전한 곳에 보관하세요. 마이페이지에서 새 코드를 발급할 수도 있어요.')
-        st.code(st.session_state.pop('new_invite'))
+        st.session_state['invite_code']=st.session_state.pop('new_invite')
     if st.session_state.pop('celebrate',False): st.balloons();st.success('가족의 빛이 자랐어요! 새로운 성장 단계에 도착했습니다.')
     page=st.session_state.get('page','홈')
     st.markdown('<div class="brand">LUMORA</div>',unsafe_allow_html=True)
@@ -353,7 +380,7 @@ try:
 
         @st.dialog('오늘의 질문')
         def question_dialog():
-            q=QUESTIONS[TODAY.toordinal()%len(QUESTIONS)]
+            q=QUESTIONS[(date(2000,TODAY.month,TODAY.day)-date(2000,1,1)).days]
             st.subheader('오늘의 질문');st.write(q)
             answers=data.get('answers',{});aid=f'{TODAY}:{user["id"]}'
             with st.form('answer'):
@@ -406,7 +433,7 @@ try:
             current=moods.get(f'{TODAY}:{member["id"]}',{})
             chips.append('<span class="mood-chip">'+esc(member['name'])+' · '+esc(current.get('mood','소식 기다리는 중'))+'</span>')
         st.markdown('<div class="mood-row">'+''.join(chips)+'</div>',unsafe_allow_html=True)
-        q=QUESTIONS[TODAY.toordinal()%len(QUESTIONS)]
+        q=QUESTIONS[(date(2000,TODAY.month,TODAY.day)-date(2000,1,1)).days]
         st.markdown('<div class="card question-card"><span class="small">오늘의 질문</span><br><b>'+esc(q)+'</b></div>',unsafe_allow_html=True)
         with st.container(key='homeactions'):
             c1,c2,c3=st.columns(3)
@@ -463,9 +490,19 @@ try:
                 if l['author']==user['id'] and st.button('편지 삭제',key='ld'+ident):delete_item('letters',ident)
 
     elif page=='가족 캘린더':
-        c1,c2=st.columns(2)
-        year=c1.number_input('연도',2020,2100,TODAY.year)
-        month=c2.selectbox('월',list(range(1,13)),index=TODAY.month-1)
+        def shift_month(delta):
+            current=date.fromisoformat(st.session_state.get('calendar_view',str(TODAY.replace(day=1))))
+            idx=current.year*12+current.month-1+delta
+            yy,mm=divmod(idx,12)
+            if 2020<=yy<=2100:
+                st.session_state['calendar_view']=str(date(yy,mm+1,1))
+        viewed=date.fromisoformat(st.session_state.get('calendar_view',str(TODAY.replace(day=1))))
+        year,month=viewed.year,viewed.month
+        with st.container(key='monthnav'):
+            prev,heading,nxt=st.columns([1,4,1])
+            prev.button('‹',on_click=shift_month,args=(-1,),use_container_width=True)
+            heading.markdown(f'<div class="month-heading">{year}년 {month}월</div>',unsafe_allow_html=True)
+            nxt.button('›',on_click=shift_month,args=(1,),use_container_width=True)
         events=data.get('events',{})
         displayed_month=f'{year:04}-{month:02}'
         if st.session_state.get('calendar_month')!=displayed_month:
@@ -474,6 +511,40 @@ try:
         selected=date.fromisoformat(st.session_state['calendar_selected'])
         def select_calendar_day(value):
             st.session_state['calendar_selected']=value
+            st.session_state['open_calendar_day']=True
+        @st.dialog('일정 추가')
+        def add_event_dialog():
+            with st.form('event'):
+                title=st.text_input('일정 이름',max_chars=150)
+                when=st.date_input('날짜',value=selected,key='new_event_date_'+str(selected))
+                kind=st.selectbox('종류',EVENT_KINDS)
+                custom_kind=st.text_input('종류 직접 입력 (선택한 종류 대신 적용)',max_chars=40,placeholder='예: 부모님 결혼식 참석, 동창회')
+                color_name=st.selectbox('색상',list(EVENT_COLORS))
+                color=EVENT_COLORS[color_name]
+                kind=custom_kind.strip() or kind
+                if st.form_submit_button('등록') and title.strip():save_item('events',{'title':title.strip(),'date':str(when),'kind':kind,'color':color},('event',3))
+
+        @st.dialog('선택한 날짜의 일정')
+        def day_events_dialog():
+            st.subheader(f'{selected.month}월 {selected.day}일')
+            if not any(e['date']==str(selected) for e in events.values()):
+                st.write('등록된 일정이 없어요.')
+            for ident,e in events.items():
+                if e['date']!=str(selected):continue
+                card(e['title'],f'{e["kind"]} · {e["name"]}')
+                if e['author']==user['id']:
+                    with st.expander('일정 수정'):
+                        with st.form('ee'+ident):
+                            title=st.text_input('제목',e['title'],max_chars=150);when=st.date_input('날짜',date.fromisoformat(e['date']))
+                            current_kind=e.get('kind','일반')
+                            options=EVENT_KINDS if current_kind in EVENT_KINDS else [current_kind]+EVENT_KINDS
+                            kind=st.selectbox('종류',options,index=options.index(current_kind))
+                            custom_kind=st.text_input('종류 직접 입력 (선택한 종류 대신 적용)',max_chars=40)
+                            current_color=event_color_name(e.get('color','#6c8764'))
+                            color_name=st.selectbox('색상',list(EVENT_COLORS),index=list(EVENT_COLORS).index(current_color))
+                            if st.form_submit_button('저장') and title.strip():save_item('events',{'kind':custom_kind.strip() or kind,'color':EVENT_COLORS[color_name],'title':title.strip(),'date':str(when)},itemid=ident)
+                    if st.button('일정 삭제',key='ed'+ident):delete_item('events',ident)
+
         with st.container(key='clickcalendar'):
             headers=st.columns(7)
             for col,label in zip(headers,['月','火','水','木','金','土','日']):
@@ -482,7 +553,7 @@ try:
                 columns=st.columns(7)
                 for col,day in zip(columns,week):
                     if not day:
-                        col.markdown('<div style="height:48px"></div>',unsafe_allow_html=True)
+                        col.markdown('<div style="height:40px"></div>',unsafe_allow_html=True)
                         continue
                     ds=f'{year:04}-{month:02}-{day:02}'
                     day_events=[e for e in events.values() if e['date']==ds]
@@ -497,36 +568,10 @@ try:
                         col.markdown('<div class="calendar-dots">'+dots+'</div>',unsafe_allow_html=True)
                     else:
                         col.markdown('<div class="calendar-dots">&nbsp;</div>',unsafe_allow_html=True)
-        st.caption('날짜를 누르면 일정이 표시됩니다. 색 점은 등록한 일정 색상이에요.')
-        st.markdown(f'### {selected.month}월 {selected.day}일 일정')
-        if not any(e['date']==str(selected) for e in events.values()):
-            st.caption('등록된 일정이 없어요.')
-        with st.expander('일정 추가'):
-            with st.form('event'):
-                title=st.text_input('일정 이름',max_chars=150)
-                when=st.date_input('날짜',value=selected,key='new_event_date_'+str(selected))
-                kind=st.selectbox('종류',EVENT_KINDS)
-                custom_kind=st.text_input('종류 직접 입력 (선택한 종류 대신 적용)',max_chars=40,placeholder='예: 부모님 결혼식 참석, 동창회')
-                color_name=st.selectbox('색상',list(EVENT_COLORS))
-                color=EVENT_COLORS[color_name]
-                kind=custom_kind.strip() or kind
-                if st.form_submit_button('등록') and title.strip():save_item('events',{'title':title.strip(),'date':str(when),'kind':kind,'color':color},('event',3))
-        for ident,e in events.items():
-            if e['date']!=str(selected):continue
-            card(e['title'],f'{e["kind"]} · {e["name"]}')
-            if e['author']==user['id']:
-                with st.expander('일정 수정'):
-                    with st.form('ee'+ident):
-                        title=st.text_input('제목',e['title'],max_chars=150);when=st.date_input('날짜',date.fromisoformat(e['date']))
-                        current_kind=e.get('kind','일반')
-                        options=EVENT_KINDS if current_kind in EVENT_KINDS else [current_kind]+EVENT_KINDS
-                        kind=st.selectbox('종류',options,index=options.index(current_kind))
-                        custom_kind=st.text_input('종류 직접 입력 (선택한 종류 대신 적용)',max_chars=40)
-                        current_color=event_color_name(e.get('color','#6c8764'))
-                        color_name=st.selectbox('색상',list(EVENT_COLORS),index=list(EVENT_COLORS).index(current_color))
-                        if st.form_submit_button('저장') and title.strip():save_item('events',{'kind':custom_kind.strip() or kind,'color':EVENT_COLORS[color_name],'title':title.strip(),'date':str(when)},itemid=ident)
-                if st.button('일정 삭제',key='ed'+ident):delete_item('events',ident)
-        st.caption('생일·기념일은 등록한 날짜에 표시됩니다. 매년 자동 반복은 적용되지 않습니다.')
+        if st.button('＋ 일정 추가',use_container_width=True):
+            add_event_dialog()
+        if st.session_state.pop('open_calendar_day',False):
+            day_events_dialog()
 
     elif page=='추억 보관함':
         with st.expander('새 추억 남기기'):
@@ -570,6 +615,15 @@ try:
                         else:st.error('현재 비밀번호 또는 새 비밀번호 길이를 확인해 주세요.')
         st.subheader('가족 구성원')
         for m in members:st.write(f'{m["name"]} · {m["role"]}')
+        with st.expander('QR 연결 주소 확인',expanded=False):
+            st.text_input('실제 루모라 앱 주소',value=st.secrets.get('APP_URL',''),key='qr_app_url',help='컴퓨터에서 루모라가 열려 있는 주소창을 복사하세요. 이 기기에서 QR을 만들 때 적용됩니다. 모든 기기의 기본값은 Secrets의 APP_URL을 수정하세요.')
+            share_url=app_share_url()
+            if share_url:
+                st.write('QR이 연결할 주소:')
+                st.code(share_url,language=None)
+                st.link_button('이 주소에서 루모라가 열리는지 확인',share_url)
+            else:
+                st.warning('실제 루모라 HTTPS 주소를 입력해 주세요. 예시 주소로는 QR을 만들지 않습니다.')
         with st.expander('가족 초대 QR'):
             st.caption('초대 코드는 해시로 저장되어 다시 조회할 수 없습니다. 새로 발급하면 이전 코드는 즉시 무효가 됩니다.')
             if st.button('초대 코드 새로 발급'):
@@ -578,8 +632,13 @@ try:
                 st.session_state['invite_code']=code
             if st.session_state.get('invite_code'):
                 code=st.session_state['invite_code'];st.code(code)
-                qr_download(st.secrets['APP_URL'].rstrip('/')+'/?'+urlencode({'invite':code}),'초대 QR 저장')
-        with st.expander('앱 접속 QR'):qr_download(st.secrets['APP_URL'],'앱 QR 저장')
+                share_url=app_share_url()
+                if share_url:qr_download(share_url+'/?'+urlencode({'invite':code}),'초대 QR 저장')
+                else:st.warning('QR 연결 주소 확인에서 실제 루모라 주소를 먼저 설정해 주세요.')
+        with st.expander('앱 접속 QR'):
+            share_url=app_share_url()
+            if share_url:qr_download(share_url,'앱 QR 저장')
+            else:st.warning('QR 연결 주소 확인에서 실제 루모라 주소를 먼저 설정해 주세요.')
         st.caption('로그인 유지 토큰은 30일 후 만료됩니다. 개인 편지는 가족에게 노출되지 않지만 서비스 DB 관리자에게까지 암호화하는 종단간 암호화는 아닙니다. 브라우저 쿠키는 HttpOnly가 아니므로 신뢰할 수 있는 기기에서만 로그인 유지를 사용하세요.')
         if st.button('로그아웃',use_container_width=True):
             with db() as c:c.execute('DELETE FROM public.lumora_sessions WHERE token=%s',(digest(st.session_state['token']),))
