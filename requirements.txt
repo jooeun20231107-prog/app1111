@@ -1,0 +1,5 @@
+streamlit>=1.45,<2
+psycopg[binary]>=3.2,<4
+Pillow>=11,<13
+qrcode>=8,<9
+streamlit-cookies-controller>=0.0.4,<1
