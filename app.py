@@ -39,6 +39,11 @@ ART = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAQDAwMDAgQDAwMEBAQFBgoGBgUFBgwICQcKDgwPD
 NAMES = ['모아','피오','보라','미루','포포','루비','로아','도담','코코','토리','소미','레오','라온','누리','오루']
 COMBOS = list(itertools.combinations_with_replacement(['A','B','O','AB'],4))
 COMBO_MAP = {tuple(sorted(c)): i % 15 for i,c in enumerate(COMBOS)}
+EVENT_KINDS = ['일반','생일','기념일','가족 모임','외식','여행','병원·검진','약속','학교·학원','시험','직장·업무','운동','취미·문화','집안일','장보기','방문·손님','휴가','반려동물','납부·마감']
+EVENT_COLORS = {'초록색':'#6c8764','빨간색':'#cc5757','주황색':'#c78c66','노란색':'#b18c28','파란색':'#648fa0','보라색':'#9d8dbc','분홍색':'#c67f9a','회색':'#80857f'}
+def event_color_name(value):
+    return next((name for name,code in EVENT_COLORS.items() if code==value),'초록색')
+
 QUESTIONS = ['오늘 가장 즐거웠던 순간은?','요즘 가장 고마운 사람은?','최근 가장 기억에 남는 일은?','가족과 함께 가고 싶은 장소는?','오늘 나의 기분을 한 단어로 표현한다면?','오늘 나에게 필요한 응원은?','이번 주 함께 하고 싶은 일은?','어릴 때 가장 좋아했던 음식은?','가족에게 고맙다고 말하고 싶은 일은?','내일 기대하는 일은?','오늘 새롭게 알게 된 것은?','요즘 나를 편안하게 하는 것은?','함께 다시 가보고 싶은 곳은?','이번 달 작은 목표는?','나에게 소중한 일상의 순간은?','최근 가장 많이 웃었던 일은?','가족에게 추천하고 싶은 노래는?','오늘 나를 칭찬하고 싶은 일은?','함께 배우고 싶은 것은?','오늘 가장 맛있었던 음식은?','가족에게 들려주고 싶은 추억은?','지금 떠오르는 소원은?','이번 주 나를 도와준 사람은?','최근 보고 싶은 사람은?','함께 만들고 싶은 전통은?','쉬는 날 하고 싶은 것은?','최근 가장 뿌듯했던 일은?','가족과 나누고 싶은 작은 발견은?','오늘 듣고 싶은 말은?','이번 주 가족에게 해주고 싶은 일은?','오늘의 하루에 제목을 붙인다면?']
 CSS = '''<style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap');
@@ -67,6 +72,14 @@ header[data-testid="stHeader"]{background:transparent}#MainMenu,footer{visibilit
 .st-key-homeactions [data-testid="stColumn"]{min-width:0!important;flex:1!important;width:33%!important}
 .st-key-homeactions button{padding:5px!important;font-size:13px!important}
 @media(max-width:600px){[data-testid="stDialog"] [role="dialog"]{max-height:85dvh;overflow-y:auto}.block-container{padding-bottom:85px}}
+
+.st-key-clickcalendar [data-testid="stHorizontalBlock"]{flex-wrap:nowrap!important;gap:4px!important}
+.st-key-clickcalendar [data-testid="stColumn"]{min-width:0!important;flex:1 1 0!important;width:14.285%!important}
+.st-key-clickcalendar button{min-height:48px!important;padding:2px!important;border-radius:10px!important}
+.st-key-clickcalendar button p{font-size:13px!important;white-space:nowrap!important}
+.st-key-clickcalendar button[kind="primary"]{background:#617c60!important;color:white!important;border-color:#617c60!important}
+.st-key-clickcalendar button[kind="primary"] p{color:white!important}
+.calendar-weekday{text-align:center;font-size:13px;font-weight:600;padding:5px 0}
 </style>'''
 st.markdown(CSS, unsafe_allow_html=True)
 
@@ -442,24 +455,44 @@ try:
         year=c1.number_input('연도',2020,2100,TODAY.year)
         month=c2.selectbox('월',list(range(1,13)),index=TODAY.month-1)
         events=data.get('events',{})
-        table='<table style="width:100%;table-layout:fixed;text-align:center;border-spacing:3px"><tr>'+''.join('<th>'+x+'</th>' for x in ['월','화','수','목','금','토','일'])+'</tr>'
-        for week in calendar.monthcalendar(year,month):
-            table+='<tr>'
-            for day in week:
-                ds=f'{year:04}-{month:02}-{day:02}'
-                colors=[e['color'] for e in events.values() if e['date']==ds]
-                dots=''.join(f'<span style="color:{esc(color)}">●</span>' for color in colors[:3])
-                table+=f'<td style="padding:8px 0;background:#fffdf8;border-radius:8px">{day if day else ""}<br><small>{dots}</small></td>'
-            table+='</tr>'
-        st.markdown(table+'</table>',unsafe_allow_html=True)
+        displayed_month=f'{year:04}-{month:02}'
+        if st.session_state.get('calendar_month')!=displayed_month:
+            st.session_state['calendar_month']=displayed_month
+            st.session_state['calendar_selected']=str(date(year,month,min(TODAY.day,calendar.monthrange(year,month)[1])))
+        selected=date.fromisoformat(st.session_state['calendar_selected'])
+        def select_calendar_day(value):
+            st.session_state['calendar_selected']=value
+        with st.container(key='clickcalendar'):
+            headers=st.columns(7)
+            for col,label in zip(headers,['月','火','水','木','金','土','日']):
+                col.markdown('<div class="calendar-weekday">'+{'月':'월','火':'화','水':'수','木':'목','金':'금','土':'토','日':'일'}[label]+'</div>',unsafe_allow_html=True)
+            for week in calendar.monthcalendar(year,month):
+                columns=st.columns(7)
+                for col,day in zip(columns,week):
+                    if not day:
+                        col.markdown('<div style="height:48px"></div>',unsafe_allow_html=True)
+                        continue
+                    ds=f'{year:04}-{month:02}-{day:02}'
+                    day_events=[e for e in events.values() if e['date']==ds]
+                    label=str(day)+(' · '+str(len(day_events)) if day_events else '')
+                    col.button(label,key='calendar_day_'+ds,use_container_width=True,
+                        type='primary' if ds==str(selected) else 'secondary',
+                        on_click=select_calendar_day,args=(ds,),
+                        help=' / '.join(e['title'] for e in day_events) or '등록된 일정 없음')
+        st.caption('날짜를 누르면 아래에 일정이 표시됩니다. 날짜 옆 숫자는 일정 개수예요.')
+        st.markdown(f'### {selected.month}월 {selected.day}일 일정')
+        if not any(e['date']==str(selected) for e in events.values()):
+            st.caption('등록된 일정이 없어요.')
         with st.expander('일정 추가'):
             with st.form('event'):
                 title=st.text_input('일정 이름',max_chars=150)
-                when=st.date_input('날짜',value=TODAY)
-                kind=st.selectbox('종류',['일반','생일','기념일'])
-                color=st.selectbox('색상',['#6c8764','#c78c66','#9d8dbc','#648fa0'])
+                when=st.date_input('날짜',value=selected,key='new_event_date_'+str(selected))
+                kind=st.selectbox('종류',EVENT_KINDS)
+                custom_kind=st.text_input('종류 직접 입력 (선택한 종류 대신 적용)',max_chars=40,placeholder='예: 부모님 결혼식 참석, 동창회')
+                color_name=st.selectbox('색상',list(EVENT_COLORS))
+                color=EVENT_COLORS[color_name]
+                kind=custom_kind.strip() or kind
                 if st.form_submit_button('등록') and title.strip():save_item('events',{'title':title.strip(),'date':str(when),'kind':kind,'color':color},('event',3))
-        selected=st.date_input('일정 확인 날짜',value=date(year,month,min(TODAY.day,calendar.monthrange(year,month)[1])))
         for ident,e in events.items():
             if e['date']!=str(selected):continue
             card(e['title'],f'{e["kind"]} · {e["name"]}')
@@ -467,7 +500,13 @@ try:
                 with st.expander('일정 수정'):
                     with st.form('ee'+ident):
                         title=st.text_input('제목',e['title'],max_chars=150);when=st.date_input('날짜',date.fromisoformat(e['date']))
-                        if st.form_submit_button('저장') and title.strip():save_item('events',{**{k:e[k] for k in ['kind','color']},'title':title.strip(),'date':str(when)},itemid=ident)
+                        current_kind=e.get('kind','일반')
+                        options=EVENT_KINDS if current_kind in EVENT_KINDS else [current_kind]+EVENT_KINDS
+                        kind=st.selectbox('종류',options,index=options.index(current_kind))
+                        custom_kind=st.text_input('종류 직접 입력 (선택한 종류 대신 적용)',max_chars=40)
+                        current_color=event_color_name(e.get('color','#6c8764'))
+                        color_name=st.selectbox('색상',list(EVENT_COLORS),index=list(EVENT_COLORS).index(current_color))
+                        if st.form_submit_button('저장') and title.strip():save_item('events',{'kind':custom_kind.strip() or kind,'color':EVENT_COLORS[color_name],'title':title.strip(),'date':str(when)},itemid=ident)
                 if st.button('일정 삭제',key='ed'+ident):delete_item('events',ident)
         st.caption('생일·기념일은 등록한 날짜에 표시됩니다. 매년 자동 반복은 적용되지 않습니다.')
 
