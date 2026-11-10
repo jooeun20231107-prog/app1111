@@ -57,6 +57,16 @@ header[data-testid="stHeader"]{background:transparent}#MainMenu,footer{visibilit
 [data-stale="true"]{opacity:1!important;transition:none!important}
 [data-testid="stStatusWidget"]{display:none}
 @media(max-width:600px){.block-container{padding-top:.5rem} .brand{font-size:23px}.card{padding:10px;margin:6px 0} [data-testid="stVerticalBlock"]{gap:.55rem}}
+
+.st-key-bottomnav button,.st-key-bottomnav button p{color:#435d4a!important;opacity:1!important}
+.st-key-bottomnav button[kind="primary"]{background:#e3ebdf!important;color:#304b36!important;border-radius:12px!important}
+.mood-row{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
+.mood-chip{display:inline-block;background:#eaf0e4;color:#435d4a;padding:5px 9px;border-radius:20px;font-size:12px}
+.question-card{padding:10px 12px;margin:5px 0}
+.st-key-homeactions [data-testid="stHorizontalBlock"]{flex-wrap:nowrap!important;gap:6px}
+.st-key-homeactions [data-testid="stColumn"]{min-width:0!important;flex:1!important;width:33%!important}
+.st-key-homeactions button{padding:5px!important;font-size:13px!important}
+@media(max-width:600px){[data-testid="stDialog"] [role="dialog"]{max-height:85dvh;overflow-y:auto}.block-container{padding-bottom:85px}}
 </style>'''
 st.markdown(CSS, unsafe_allow_html=True)
 
@@ -99,11 +109,26 @@ def session_user(token):
         row=c.execute('SELECT u.id,u.family,u.username,u.name,u.role,u.blood FROM public.lumora_sessions s JOIN public.lumora_users u ON u.id=s.userid WHERE s.token=%s AND s.expires>now()',(digest(token),)).fetchone()
     return dict(zip(['id','family','username','name','role','blood'],row)) if row else None
 
-def family_data(user):
+def read_family_data(user):
     with db() as c:
         row=c.execute('SELECT f.name,f.data FROM public.lumora_families f JOIN public.lumora_users u ON u.family=f.id WHERE u.id=%s AND f.id=%s',(user['id'],user['family'])).fetchone()
         members=c.execute('SELECT id,name,role,blood FROM public.lumora_users WHERE family=%s ORDER BY id',(user['family'],)).fetchall()
     return row[0],row[1],[dict(zip(['id','name','role','blood'],m)) for m in members]
+
+def family_data(user):
+    cached=st.session_state.get('_family_snapshot')
+    if cached and cached['uid']==user['id'] and time.monotonic()-cached['at']<10:
+        return cached['value']
+    value=read_family_data(user)
+    st.session_state['_family_snapshot']={'uid':user['id'],'at':time.monotonic(),'value':value}
+    return value
+
+def navigate(label):
+    st.session_state['page']=label
+
+def refresh_family():
+    st.session_state.pop('_family_snapshot',None)
+
 
 # Every mutation authenticates server-side and locks the family row. Never accept a client-supplied family ID.
 def mutate(fn):
@@ -114,6 +139,7 @@ def mutate(fn):
         data=row[0]
         fn(data,user)
         c.execute('UPDATE public.lumora_families SET data=%s WHERE id=%s',(Jsonb(data),user['family']))
+    refresh_family()
 
 def award(data,user,activity,points):
     # One reward per activity per member per KST day; edits/deletions never reset ledger.
@@ -184,7 +210,7 @@ cookies=CookieController()
 if not st.session_state.get('splash_done'):
     splash=st.empty()
     splash.markdown('<div style="position:fixed;inset:0;z-index:99999;background:#faf7ef;display:grid;place-items:center"><div class="brand" style="font-size:42px">LUMORA</div></div>',unsafe_allow_html=True)
-    time.sleep(5);splash.empty();st.session_state['splash_done']=True
+    time.sleep(3);splash.empty();st.session_state['splash_done']=True
     # Cookie component needs a mounted client render before restoration.
     st.rerun()
 if not st.session_state.get('token'):
@@ -224,7 +250,7 @@ if not user:
                                 valid=verify(password,existing[0][1]);uid=existing[0][0]
                             elif not existing and len(password)>=8:
                                 count=c.execute('SELECT count(*) FROM public.lumora_users WHERE family=%s',(fid,)).fetchone()[0]
-                                if count<4:
+                                if True:
                                     uid=key()
                                     c.execute('INSERT INTO public.lumora_users VALUES(%s,%s,%s,%s,%s,%s,%s)',(uid,fid,key(),password_hash(password),nickname,'가족','O'))
                                     valid=True
@@ -244,7 +270,7 @@ if not user:
                             cookies.set('lumora_session',token,max_age=2592000,secure=True,same_site='strict')
                             time.sleep(0.3)
                         st.query_params.clear();st.rerun()
-                    else:st.error('입력 내용을 확인해 주세요. 첫 참여는 비밀번호 8자 이상·가족 4명 이하이어야 합니다. 반복 실패하면 15분간 제한됩니다.')
+                    else:st.error('입력 내용을 확인해 주세요. 첫 참여는 비밀번호 8자 이상이어야 합니다. 반복 실패하면 15분간 제한됩니다.')
                 except psycopg.Error:st.error('연결하지 못했습니다. 잠시 후 다시 시도해 주세요.')
     with signup:
         with st.form('new_family'):
@@ -284,25 +310,12 @@ try:
         st.code(st.session_state.pop('new_invite'))
     if st.session_state.pop('celebrate',False): st.balloons();st.success('가족의 빛이 자랐어요! 새로운 성장 단계에 도착했습니다.')
     page=st.session_state.get('page','홈')
-    if st.session_state.get('needs_profile'):
-        st.info('입장했어요! 마이페이지에서 역할과 캐릭터 선택 요소를 설정해 주세요.')
     st.markdown('<div class="brand">LUMORA</div>',unsafe_allow_html=True)
-    st.caption(f'{family_name} · {TODAY:%Y.%m.%d} · {user["name"]}님')
     points=sum(data.get('ledger',{}).values()); level=stage(points)
 
     if page=='홈':
-        home_section=st.selectbox('오늘의 가족', ['캐릭터','가족 상태','오늘의 질문','소식과 일정'],label_visibility='collapsed')
-        if home_section=='캐릭터':
-            bloods=tuple(sorted(m['blood'] for m in members))
-            ci=COMBO_MAP[bloods] if len(bloods)==4 else None
-            with st.expander('우리 가족의 빛',expanded=True):
-                if ci is None: st.info(f'가족 {len(members)}/4명 · 네 명이 모이면 공동 캐릭터가 결정돼요.')
-                st.image(character(ci or 0,level if ci is not None else 0),width=150)
-                st.write(f'**{NAMES[ci] if ci is not None else "기다리는 알"} · {["알","부화 중","아기","성체"][level if ci is not None else 0]}**')
-                target=[30,80,180,180][level]
-                st.progress(min(points/target,1.0),text=f'공동 {points}P · '+(f'다음 단계까지 {max(target-points,0)}P' if level<3 else '성체로 성장했어요'))
-                st.caption('질문 5P · 메모 2P · 일정 3P · 추억 5P · 목표 완료 8P / 활동별·사람별 하루 1회. 수정·삭제 후에도 중복 지급되지 않아요.')
-        if home_section=='가족 상태':
+        @st.dialog('오늘의 기분')
+        def mood_dialog():
             moods=data.get('moods',{})
             for m in members:
                 mood=moods.get(f'{TODAY}:{m["id"]}',{})
@@ -312,7 +325,9 @@ try:
                     mood=st.selectbox('오늘의 기분',['행복함','평온함','피곤함','속상함','설렘','걱정됨'])
                     msg=st.text_input('짧은 메시지',max_chars=120)
                     if st.form_submit_button('기분 저장'): save_item('moods',{'mood':mood,'message':msg},itemid=f'{TODAY}:{user["id"]}')
-        if home_section=='오늘의 질문':
+
+        @st.dialog('오늘의 질문')
+        def question_dialog():
             q=QUESTIONS[TODAY.toordinal()%len(QUESTIONS)]
             st.subheader('오늘의 질문');st.write(q)
             answers=data.get('answers',{});aid=f'{TODAY}:{user["id"]}'
@@ -334,7 +349,9 @@ try:
                                 edited=st.text_area('답변 수정',a['text'],max_chars=1000)
                                 if st.form_submit_button('수정 저장') and edited.strip():save_item('answers',{'text':edited.strip(),'date':a['date'],'question':a['question']},itemid=a['date']+':'+a['author'])
                             if st.button('지난 답변 삭제',key='pastdel'+a['date']+a['author']):delete_item('answers',a['date']+':'+a['author'])
-        if home_section=='소식과 일정':
+
+        @st.dialog('가족 소식')
+        def news_dialog():
             upcoming=sorted([x for x in data.get('events',{}).values() if x['date']>=str(TODAY)],key=lambda x:x['date'])[:3]
             st.subheader('다가오는 일정')
             if not upcoming:st.caption('아직 예정된 일정이 없어요.')
@@ -347,8 +364,36 @@ try:
             with st.expander('최근 가족 활동'):
                 for created,label,name,text in sorted(recent,reverse=True)[:6]:st.caption(f'{created[:16]} · {name} · {label} · {text[:60]}')
 
+        bloods=tuple(sorted(m['blood'] for m in members))
+        if len(bloods)==4:
+            ci=COMBO_MAP[bloods]
+        else:
+            ci=int(hashlib.sha256('|'.join(bloods).encode()).hexdigest()[:12],16)%15
+        with st.container(border=True):
+            st.image(character(ci,level),width=125)
+            st.markdown(f'**{NAMES[ci]} · {["알","부화 중","아기","성체"][level]}**')
+            target=[30,80,180,180][level]
+            st.progress(min(points/target,1.0),text=f'{points}P · '+(f'다음 성장까지 {max(target-points,0)}P' if level<3 else '함께 성장했어요'))
+        moods=data.get('moods',{})
+        # Compact wrapping chips, not a tall stack of member cards.
+        chips=[]
+        for member in members:
+            current=moods.get(f'{TODAY}:{member["id"]}',{})
+            chips.append('<span class="mood-chip">'+esc(member['name'])+' · '+esc(current.get('mood','소식 기다리는 중'))+'</span>')
+        st.markdown('<div class="mood-row">'+''.join(chips)+'</div>',unsafe_allow_html=True)
+        q=QUESTIONS[TODAY.toordinal()%len(QUESTIONS)]
+        st.markdown('<div class="card question-card"><span class="small">오늘의 질문</span><br><b>'+esc(q)+'</b></div>',unsafe_allow_html=True)
+        with st.container(key='homeactions'):
+            c1,c2,c3=st.columns(3)
+            if c1.button('답변하기',use_container_width=True):question_dialog()
+            if c2.button('내 기분',use_container_width=True):mood_dialog()
+            if c3.button('가족 소식',use_container_width=True):news_dialog()
+        upcoming=sorted([e for e in data.get('events',{}).values() if e['date']>=str(TODAY)],key=lambda e:e['date'])
+        if upcoming:st.caption('다음 일정 · '+upcoming[0]['date']+' · '+upcoming[0]['title'])
+        st.button('가족 소식 새로고침',on_click=refresh_family,key='home_refresh')
+
     elif page=='가족 활동':
-        section=st.selectbox('함께 나누기',['가족 메모','버킷리스트','미래 편지'])
+        section=st.radio('함께 나누기',['가족 메모','버킷리스트','미래 편지'],horizontal=True,label_visibility='collapsed')
         if section=='가족 메모':
             with st.form('note'):
                 text=st.text_area('가족에게 남길 말',max_chars=2000);pinned=st.checkbox('중요 메모 고정')
@@ -466,6 +511,7 @@ try:
                     if duplicate:
                         st.error('가족 안에서 이미 사용하는 이름입니다.');st.stop()
                     c.execute('UPDATE public.lumora_users SET name=%s,role=%s,blood=%s WHERE id=%s',(name.strip(),role,blood,user['id']))
+                refresh_family()
                 st.session_state.pop('needs_profile',None)
                 st.rerun()
         with st.expander('비밀번호 변경'):
@@ -500,7 +546,6 @@ try:
 
     with st.container(key='bottomnav'):
         for col,label in zip(st.columns(5),['홈','가족 활동','가족 캘린더','추억 보관함','마이페이지']):
-            if col.button(label,key='nav'+label,use_container_width=True,type='primary' if page==label else 'secondary'):
-                st.session_state['page']=label;st.rerun()
+            col.button(label,key='nav'+label,use_container_width=True,type='primary' if page==label else 'secondary',on_click=navigate,args=(label,))
 except ValueError as e:st.error(str(e))
 except psycopg.Error:st.error('저장소 연결이 불안정합니다. 잠시 후 다시 시도해 주세요. 같은 항목이 저장되었는지 먼저 확인해 주세요.')
