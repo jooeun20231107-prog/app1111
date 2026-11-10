@@ -178,7 +178,7 @@ def award(data,user,activity,points):
         before=sum(ledger.values()); ledger[stamp]=points
         if stage(before)!=stage(before+points): st.session_state['celebrate']=True
 
-def stage(p): return 0 if p<30 else 1 if p<80 else 2 if p<180 else 3
+def stage(p): return 0 if p<60 else 1 if p<300 else 2 if p<1200 else 3
 
 def save_item(collection, payload, reward=None, itemid=None):
     ident=itemid or key()
@@ -199,7 +199,7 @@ def delete_item(collection,ident):
     mutate(action);st.rerun()
 
 def app_share_url():
-    raw=st.session_state.get('qr_app_url',st.secrets.get('APP_URL','')).strip()
+    raw=st.secrets.get('APP_URL','').strip()
     parsed=urlsplit(raw)
     host=(parsed.hostname or '').lower()
     if parsed.scheme!='https' or not host or parsed.username or parsed.password or any(x in host for x in ['your-app','yourapp','our-app','example','localhost']):
@@ -423,8 +423,9 @@ try:
             ci=int(hashlib.sha256('|'.join(bloods).encode()).hexdigest()[:12],16)%15
         with st.container(border=True):
             st.image(character(ci,level),width=125)
-            st.markdown(f'**{NAMES[ci]} · {["알","부화 중","아기","성체"][level]}**')
-            target=[30,80,180,180][level]
+            pet_name=data.get('character_name') or NAMES[ci]
+            st.markdown('**'+esc(pet_name)+' · '+['알','부화 중','아기','성체'][level]+'**')
+            target=[60,300,1200,1200][level]
             st.progress(min(points/target,1.0),text=f'{points}P · '+(f'다음 성장까지 {max(target-points,0)}P' if level<3 else '함께 성장했어요'))
         moods=data.get('moods',{})
         # Compact wrapping chips, not a tall stack of member cards.
@@ -601,6 +602,21 @@ try:
                 if m['author']==user['id'] and st.button('추억 삭제',key='md'+ident):delete_item('memories',ident)
     else:
         st.subheader('마이페이지')
+        with st.expander('우리 가족 캐릭터 이름'):
+            st.caption('가족 모두가 함께 쓰는 이름이에요. 가족 누구나 바꿀 수 있습니다.')
+            with st.form('character_name_form'):
+                pet_name=st.text_input('캐릭터 이름',value=data.get('character_name',''),max_chars=20,placeholder='가족이 함께 이름을 지어주세요')
+                submitted=st.form_submit_button('이름 저장',use_container_width=True)
+            if submitted:
+                if not pet_name.strip():
+                    st.warning('이름을 입력해 주세요.')
+                else:
+                    def rename_character(d,u):
+                        d['character_name']=pet_name.strip()
+                    mutate(rename_character)
+                    st.success('가족 캐릭터 이름을 저장했어요.')
+                    st.rerun()
+
         with st.expander('비밀번호 변경'):
             with st.form('password_change'):
                 old=st.text_input('현재 비밀번호',type='password',max_chars=128)
@@ -615,15 +631,6 @@ try:
                         else:st.error('현재 비밀번호 또는 새 비밀번호 길이를 확인해 주세요.')
         st.subheader('가족 구성원')
         for m in members:st.write(f'{m["name"]} · {m["role"]}')
-        with st.expander('QR 연결 주소 확인',expanded=False):
-            st.text_input('실제 루모라 앱 주소',value=st.secrets.get('APP_URL',''),key='qr_app_url',help='컴퓨터에서 루모라가 열려 있는 주소창을 복사하세요. 이 기기에서 QR을 만들 때 적용됩니다. 모든 기기의 기본값은 Secrets의 APP_URL을 수정하세요.')
-            share_url=app_share_url()
-            if share_url:
-                st.write('QR이 연결할 주소:')
-                st.code(share_url,language=None)
-                st.link_button('이 주소에서 루모라가 열리는지 확인',share_url)
-            else:
-                st.warning('실제 루모라 HTTPS 주소를 입력해 주세요. 예시 주소로는 QR을 만들지 않습니다.')
         with st.expander('가족 초대 QR'):
             st.caption('초대 코드는 해시로 저장되어 다시 조회할 수 없습니다. 새로 발급하면 이전 코드는 즉시 무효가 됩니다.')
             if st.button('초대 코드 새로 발급'):
@@ -634,11 +641,11 @@ try:
                 code=st.session_state['invite_code'];st.code(code)
                 share_url=app_share_url()
                 if share_url:qr_download(share_url+'/?'+urlencode({'invite':code}),'초대 QR 저장')
-                else:st.warning('QR 연결 주소 확인에서 실제 루모라 주소를 먼저 설정해 주세요.')
+                else:st.warning('앱 설정의 Secrets에서 APP_URL을 실제 루모라 주소로 설정해 주세요.')
         with st.expander('앱 접속 QR'):
             share_url=app_share_url()
             if share_url:qr_download(share_url,'앱 QR 저장')
-            else:st.warning('QR 연결 주소 확인에서 실제 루모라 주소를 먼저 설정해 주세요.')
+            else:st.warning('앱 설정의 Secrets에서 APP_URL을 실제 루모라 주소로 설정해 주세요.')
         st.caption('로그인 유지 토큰은 30일 후 만료됩니다. 개인 편지는 가족에게 노출되지 않지만 서비스 DB 관리자에게까지 암호화하는 종단간 암호화는 아닙니다. 브라우저 쿠키는 HttpOnly가 아니므로 신뢰할 수 있는 기기에서만 로그인 유지를 사용하세요.')
         if st.button('로그아웃',use_container_width=True):
             with db() as c:c.execute('DELETE FROM public.lumora_sessions WHERE token=%s',(digest(st.session_state['token']),))
