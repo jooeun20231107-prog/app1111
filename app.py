@@ -138,6 +138,14 @@ def session_user(token):
         row=c.execute('SELECT u.id,u.family,u.username,u.name,u.role,u.blood FROM public.lumora_sessions s JOIN public.lumora_users u ON u.id=s.userid WHERE s.token=%s AND s.expires>now()',(digest(token),)).fetchone()
     return dict(zip(['id','family','username','name','role','blood'],row)) if row else None
 
+def screen_user(token):
+    cached=st.session_state.get('_screen_auth')
+    if token and cached and cached['token']==token and time.monotonic()-cached['at']<15:
+        return cached['user']
+    result=session_user(token)
+    st.session_state['_screen_auth']={'token':token,'at':time.monotonic(),'user':result}
+    return result
+
 def read_family_data(user):
     with db() as c:
         row=c.execute('SELECT f.name,f.data FROM public.lumora_families f JOIN public.lumora_users u ON u.family=f.id WHERE u.id=%s AND f.id=%s',(user['id'],user['family'])).fetchone()
@@ -189,7 +197,9 @@ def save_item(collection, payload, reward=None, itemid=None):
         items[ident]={**payload,'author':user['id'],'name':user['name'],'created':old['created'] if old else now()}
         if reward: award(data,user,*reward)
     mutate(action)
-    st.success('저장했어요.'); st.rerun()
+    messages={'notes':'메모를 남겼습니다.','letters':'편지를 봉인했습니다.','buckets':'가족 목표를 추가했습니다.','events':'일정을 저장했습니다.','memories':'추억을 저장했습니다.'}
+    st.session_state['_save_notice']='수정했습니다.' if itemid else messages.get(collection,'저장했습니다.')
+    st.rerun()
 
 def delete_item(collection,ident):
     def action(data,user):
@@ -205,6 +215,20 @@ def app_share_url():
     if parsed.scheme!='https' or not host or parsed.username or parsed.password or any(x in host for x in ['your-app','yourapp','our-app','example','localhost']):
         return None
     return urlunsplit((parsed.scheme,parsed.netloc,parsed.path.rstrip('/'),'',''))
+
+@st.cache_data(show_spinner=False)
+def envelope_image():
+    from PIL import Image, ImageDraw
+    canvas=Image.new('RGB',(800,400),'#faf7ef')
+    draw=ImageDraw.Draw(canvas)
+    draw.rounded_rectangle((56,69,752,348),radius=24,fill='#e9dfcc')
+    draw.rounded_rectangle((48,57,744,336),radius=22,fill='#fff9e9',outline='#d8c9ad',width=3)
+    draw.polygon([(49,334),(397,143),(743,334)],fill='#eee2c9')
+    draw.polygon([(51,60),(741,60),(397,244)],fill='#f2e8d4',outline='#d8c9ad')
+    draw.ellipse((362,207,434,279),fill='#a66558',outline='#895044',width=3)
+    draw.ellipse((371,216,425,270),outline='#d6a398',width=2)
+    draw.line([(387,229),(387,256),(407,256)],fill='#f8dfb7',width=4)
+    return canvas
 
 def qr_download(url,label):
     im=qrcode.make(url); buf=io.BytesIO(); im.save(buf,format='PNG')
@@ -361,6 +385,10 @@ try:
     if 'new_invite' in st.session_state:
         st.session_state['invite_code']=st.session_state.pop('new_invite')
     if st.session_state.pop('celebrate',False): st.balloons();st.success('가족의 빛이 자랐어요! 새로운 성장 단계에 도착했습니다.')
+    notice=st.session_state.pop('_save_notice',None)
+    if notice:
+        st.success(notice)
+        st.toast(notice,icon='✅')
     page=st.session_state.get('page','홈')
     st.markdown('<div class="brand">LUMORA</div>',unsafe_allow_html=True)
     points=sum(data.get('ledger',{}).values()); level=stage(points)
@@ -446,7 +474,8 @@ try:
         st.button('가족 소식 새로고침',on_click=refresh_family,key='home_refresh')
 
     elif page=='가족 활동':
-        section=st.radio('함께 나누기',['가족 메모','버킷리스트','미래 편지'],horizontal=True,label_visibility='collapsed')
+        section=st.segmented_control('함께 나누기',['가족 메모','버킷리스트','미래 편지'],default='가족 메모',selection_mode='single',label_visibility='collapsed',key='activity_section')
+        section=section or '가족 메모'
         if section=='가족 메모':
             with st.form('note'):
                 text=st.text_area('가족에게 남길 말',max_chars=2000);pinned=st.checkbox('중요 메모 고정')
@@ -484,11 +513,22 @@ try:
                 unlock=st.date_input('공개 날짜',min_value=TODAY,value=TODAY+timedelta(days=30))
                 visibility=st.radio('공개 범위',['나만','가족'],horizontal=True)
                 if st.form_submit_button('편지 봉인') and title.strip() and text.strip():save_item('letters',{'title':title.strip(),'text':text.strip(),'unlock':str(unlock),'visibility':visibility})
-            for ident,l in data.get('letters',{}).items():
-                if l['visibility']=='나만' and l['author']!=user['id']:continue
-                ready=l['unlock']<=str(TODAY)
-                card(l['title'],f'{l["name"]} · {l["unlock"]} 공개 · {l["visibility"]}\n'+(l['text'] if ready else '아직 봉인된 편지예요.'))
-                if l['author']==user['id'] and st.button('편지 삭제',key='ld'+ident):delete_item('letters',ident)
+            @st.dialog('우리의 편지함')
+            def letter_archive():
+                visible=[(ident,l) for ident,l in data.get('letters',{}).items() if l['visibility']=='가족' or l['author']==user['id']]
+                if not visible:st.caption('아직 보관한 편지가 없어요.')
+                for ident,l in sorted(visible,key=lambda pair:pair[1]['unlock']):
+                    ready=l['unlock']<=str(TODAY)
+                    st.image(envelope_image(),use_container_width=True)
+                    st.markdown('**'+esc(l['title'])+'**')
+                    st.caption(l['name']+' · '+l['unlock']+' 열리는 날 · '+l['visibility'])
+                    if ready:
+                        with st.expander('편지 열어 읽기'):
+                            st.write(l['text'])
+                    else:
+                        st.caption('봉인 중 · 약속한 날에 열 수 있어요.')
+                    if l['author']==user['id'] and st.button('편지 삭제',key='ld'+ident):delete_item('letters',ident)
+            if st.button('보관한 편지 보기',use_container_width=True):letter_archive()
 
     elif page=='가족 캘린더':
         def shift_month(delta):
