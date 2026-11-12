@@ -452,7 +452,7 @@ try:
             for m in members:
                 mood=moods.get(f'{TODAY}:{m["id"]}',{})
                 card(m['name'],f'{mood.get("mood","아직 소식이 없어요")}  {mood.get("message","")}')
-            with st.expander('내 기분 남기기'):
+            with st.popover('내 기분 남기기'):
                 with st.form('mood'):
                     mood=st.selectbox('오늘의 기분',['행복함','평온함','피곤함','속상함','설렘','걱정됨'])
                     msg=st.text_input('짧은 메시지',max_chars=120)
@@ -472,7 +472,7 @@ try:
                 if a['date']==str(TODAY):
                     card(a['name'],a['text'])
                     if a['author']==user['id'] and st.button('답변 삭제',key='ad'+ident):delete_item('answers',ident)
-            with st.expander('지난 질문과 답변'):
+            with st.popover('지난 질문과 답변'):
                 for a in sorted(answers.values(),key=lambda x:x['created'],reverse=True):
                     if a['date']!=str(TODAY):
                         card(f'{a["date"]} · {a["name"]}',a['question']+'\n'+a['text'])
@@ -493,8 +493,10 @@ try:
             recent=[]
             for label,col in [('메모','notes'),('일정','events'),('추억','memories'),('목표','buckets')]:
                 for item in data.get(col,{}).values():recent.append((item['created'],label,item['name'],item.get('title',item.get('text',''))))
-            with st.expander('최근 가족 활동'):
-                for created,label,name,text in sorted(recent,reverse=True)[:6]:st.caption(f'{created[:16]} · {name} · {label} · {text[:60]}')
+            st.markdown('**최근 가족 활동**')
+            for created,label,name,text in sorted(recent,reverse=True)[:3]:
+                card(name+' · '+label,text[:80])
+            if not recent:st.caption('아직 가족 활동이 없어요.')
 
         bloods=tuple(sorted(m['blood'] for m in members))
         if len(bloods)==4:
@@ -529,12 +531,13 @@ try:
         section=st.segmented_control('함께 나누기',['가족 메모','버킷리스트','미래 편지'],default='가족 메모',selection_mode='single',label_visibility='collapsed',key='activity_section')
         section=section or '가족 메모'
         if section=='가족 메모':
-            text=st.chat_input('가족에게 한마디 보내기',key='note_composer')
-            if text and text.strip():save_item('notes',{'text':text.strip(),'pinned':False},('note',2))
+            with st.container(key='inline_note_composer'):
+                text=st.chat_input('가족에게 한마디 보내기',key='note_composer')
+                if text and text.strip():save_item('notes',{'text':text.strip(),'pinned':False},('note',2))
             for ident,n in sorted(data.get('notes',{}).items(),key=lambda kv:(kv[1].get('pinned',False),kv[1]['created']),reverse=True):
                 card(('📌 ' if n.get('pinned') else '')+n['name']+' · '+n['created'][:16],n['text'])
                 if n['author']==user['id']:
-                    with st.expander('수정·삭제'):
+                    with st.popover('수정·삭제'):
                         with st.form('ne'+ident):
                             text=st.text_area('내용',n['text'],max_chars=2000);pin=st.checkbox('고정',n.get('pinned',False))
                             if st.form_submit_button('수정') and text.strip():save_item('notes',{'text':text.strip(),'pinned':pin},itemid=ident)
@@ -610,7 +613,7 @@ try:
                 if e['date']!=str(selected):continue
                 card(e['title'],f'{e["kind"]} · {e["name"]}')
                 if e['author']==user['id']:
-                    with st.expander('일정 수정'):
+                    with st.popover('일정 수정'):
                         with st.form('ee'+ident):
                             title=st.text_input('제목',e['title'],max_chars=150);when=st.date_input('날짜',date.fromisoformat(e['date']))
                             current_kind=e.get('kind','일반')
@@ -672,7 +675,7 @@ try:
         day=st.date_input('확인할 날짜',value=TODAY) if filter_date else None
         for ident,m in sorted(data.get('memories',{}).items(),key=lambda kv:kv[1]['date'],reverse=True):
             if day and m['date']!=str(day):continue
-            with st.expander(f'{m["date"]} · {m["title"]}'):
+            with st.popover(f'{m["date"]} · {m["title"]}'):
                 try:st.image(base64.b64decode(m['photo']),use_container_width=True)
                 except Exception:st.caption('사진을 표시할 수 없어요.')
                 st.write(m['text']);st.caption(m['name'])
