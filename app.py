@@ -230,6 +230,44 @@ def envelope_image():
     draw.line([(387,229),(387,256),(407,256)],fill='#f8dfb7',width=4)
     return canvas
 
+@st.dialog('편지 보관함',width='large')
+def open_letter_archive():
+    mine,family_tab=st.tabs(['나의 봉인된 편지','가족이 공유한 편지'])
+    for tab,is_mine in [(mine,True),(family_tab,False)]:
+        with tab:
+            visible=[(i,l) for i,l in data.get('letters',{}).items() if (l['author']==user['id'] if is_mine else l['author']!=user['id'] and l['visibility']=='가족')]
+            if not visible:st.caption('보관된 편지가 없어요.')
+            with st.container(key='lettergrid'+str(is_mine)):
+                cols=st.columns(3)
+                for n,(ident,l) in enumerate(sorted(visible,key=lambda pair:pair[1]['unlock'])):
+                    with cols[n%3]:
+                        with st.container(border=True):
+                            st.image(envelope_image(),use_container_width=True)
+                            st.markdown('**'+esc(l['title'])+'**')
+                            st.caption(l['name']+' · '+l['unlock'])
+                            if l['unlock']<=str(TODAY):
+                                st.caption('개봉 가능')
+                                if st.button('편지 읽기',key='read_'+ident,use_container_width=True):
+                                    st.session_state['_reading_letter']=ident
+                            else:st.caption('봉인 중')
+                            if l['author']==user['id'] and st.button('삭제',key='ld'+ident):delete_item('letters',ident)
+            selected=st.session_state.get('_reading_letter')
+            for ident,l in visible:
+                if selected==ident and l['unlock']<=str(TODAY):
+                    st.divider()
+                    st.markdown('### '+esc(l['title']))
+                    st.write(l['text'])
+
+@st.dialog('알림',width='large')
+def open_notifications():
+    visible=[l for l in data.get('letters',{}).values() if l['unlock']<=str(TODAY) and (l['author']==user['id'] or l['visibility']=='가족')]
+    if not visible:st.caption('아직 열어볼 편지가 없어요.')
+    for l in sorted(visible,key=lambda x:x['unlock'],reverse=True):
+        st.markdown('**편지가 도착했어요 · '+esc(l['title'])+'**')
+        st.caption(l['name']+' · '+l['unlock'])
+        st.write(l['text'])
+    st.caption('앱 안에서 확인하는 알림입니다. 휴대전화 푸시 알림은 제공하지 않습니다.')
+
 def qr_download(url,label):
     im=qrcode.make(url); buf=io.BytesIO(); im.save(buf,format='PNG')
     st.image(buf.getvalue(),width=180)
@@ -389,6 +427,20 @@ try:
     if notice:
         st.success(notice)
         st.toast(notice,icon='✅')
+    with st.container(key='notificationbar'):
+        left,right=st.columns([8,1])
+        with right:
+            if st.button('',icon=':material/notifications:',help='공개된 편지 알림',key='notification_open'):open_notifications()
+    st.markdown("""<style>
+.st-key-notificationbar button{border:0!important;background:transparent!important;min-height:44px!important}
+.st-key-monthnav button{font-size:28px!important;min-height:48px!important}
+[data-testid="stExpander"] summary{min-height:48px!important;font-size:16px!important}
+[data-testid="stDialog"] [role="dialog"]{max-height:90dvh;overflow-y:auto;border-radius:24px!important}
+@media(max-width:640px){
+.st-key-lettergridTrue [data-testid="stHorizontalBlock"],.st-key-lettergridFalse [data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+.st-key-lettergridTrue [data-testid="stColumn"],.st-key-lettergridFalse [data-testid="stColumn"]{width:auto!important;min-width:0!important}
+}
+</style>""",unsafe_allow_html=True)
     page=st.session_state.get('page','홈')
     st.markdown('<div class="brand">LUMORA</div>',unsafe_allow_html=True)
     points=sum(data.get('ledger',{}).values()); level=stage(points)
@@ -477,10 +529,8 @@ try:
         section=st.segmented_control('함께 나누기',['가족 메모','버킷리스트','미래 편지'],default='가족 메모',selection_mode='single',label_visibility='collapsed',key='activity_section')
         section=section or '가족 메모'
         if section=='가족 메모':
-            with st.form('note'):
-                text=st.text_area('가족에게 남길 말',max_chars=2000);pinned=st.checkbox('중요 메모 고정')
-                if st.form_submit_button('메모 남기기'):
-                    if text.strip():save_item('notes',{'text':text.strip(),'pinned':pinned},('note',2))
+            text=st.chat_input('가족에게 한마디 보내기',key='note_composer')
+            if text and text.strip():save_item('notes',{'text':text.strip(),'pinned':False},('note',2))
             for ident,n in sorted(data.get('notes',{}).items(),key=lambda kv:(kv[1].get('pinned',False),kv[1]['created']),reverse=True):
                 card(('📌 ' if n.get('pinned') else '')+n['name']+' · '+n['created'][:16],n['text'])
                 if n['author']==user['id']:
@@ -494,10 +544,11 @@ try:
             st.progress(done/max(1,len(buckets)),text=f'{done}/{len(buckets)}개 달성')
             with st.form('bucket'):
                 title=st.text_input('함께 이루고 싶은 일',max_chars=150)
-                owner=st.selectbox('담당자',members,format_func=lambda m:m['name'])
+                st.caption('기록자: '+user['name'])
+                owner=user
                 if st.form_submit_button('목표 추가') and title.strip():save_item('buckets',{'title':title.strip(),'owner':owner['name'],'done':False,'done_date':''})
             for ident,b in buckets.items():
-                card(('✓ ' if b['done'] else '○ ')+b['title'],f'담당 {b["owner"]} · 작성 {b["name"]}'+(' · 완료 '+b['done_date'] if b['done'] else ''))
+                card(('✓ ' if b['done'] else '○ ')+b['title'],f'기록자 {b["name"]} · 작성 {b["name"]}'+(' · 완료 '+b['done_date'] if b['done'] else ''))
                 if st.button('다시 진행' if b['done'] else '함께 완료했어요',key='bc'+ident):
                     def toggle(d,u,i=ident):
                         item=d['buckets'][i];item['done']=not item['done'];item['done_date']=str(TODAY) if item['done'] else ''
@@ -511,24 +562,9 @@ try:
                 title=st.text_input('편지 제목',max_chars=100)
                 text=st.text_area('미래에 전할 이야기',max_chars=5000)
                 unlock=st.date_input('공개 날짜',min_value=TODAY,value=TODAY+timedelta(days=30))
-                visibility=st.radio('공개 범위',['나만','가족'],horizontal=True)
+                visibility=st.selectbox('받는 사람',['나만','가족'],format_func=lambda x:'나에게 보내기' if x=='나만' else '가족에게 공유하기')
                 if st.form_submit_button('편지 봉인') and title.strip() and text.strip():save_item('letters',{'title':title.strip(),'text':text.strip(),'unlock':str(unlock),'visibility':visibility})
-            @st.dialog('우리의 편지함')
-            def letter_archive():
-                visible=[(ident,l) for ident,l in data.get('letters',{}).items() if l['visibility']=='가족' or l['author']==user['id']]
-                if not visible:st.caption('아직 보관한 편지가 없어요.')
-                for ident,l in sorted(visible,key=lambda pair:pair[1]['unlock']):
-                    ready=l['unlock']<=str(TODAY)
-                    st.image(envelope_image(),use_container_width=True)
-                    st.markdown('**'+esc(l['title'])+'**')
-                    st.caption(l['name']+' · '+l['unlock']+' 열리는 날 · '+l['visibility'])
-                    if ready:
-                        with st.expander('편지 열어 읽기'):
-                            st.write(l['text'])
-                    else:
-                        st.caption('봉인 중 · 약속한 날에 열 수 있어요.')
-                    if l['author']==user['id'] and st.button('편지 삭제',key='ld'+ident):delete_item('letters',ident)
-            if st.button('보관한 편지 보기',use_container_width=True):letter_archive()
+            if st.button('봉인된 편지 보기',icon=':material/mail:',use_container_width=True):open_letter_archive()
 
     elif page=='가족 캘린더':
         def shift_month(delta):
@@ -615,7 +651,8 @@ try:
             day_events_dialog()
 
     elif page=='추억 보관함':
-        with st.expander('새 추억 남기기'):
+        if st.button('새 추억 남기기',icon=':material/add_photo_alternate:',use_container_width=True) or st.session_state.get('_memory_open'):
+            st.session_state['_memory_open']=True
             with st.form('memory'):
                 title=st.text_input('추억 제목',max_chars=150)
                 when=st.date_input('추억 날짜',value=TODAY)
@@ -711,6 +748,7 @@ try:
 
     with st.container(key='bottomnav'):
         for col,label in zip(st.columns(5),['홈','가족 활동','가족 캘린더','추억 보관함','마이페이지']):
-            col.button(label,key='nav'+label,use_container_width=True,type='primary' if page==label else 'secondary',on_click=navigate,args=(label,))
+            nav_icons={'홈':':material/home:','가족 활동':':material/forum:','가족 캘린더':':material/calendar_month:','추억 보관함':':material/photo_library:','마이페이지':':material/person:'}
+            col.button('',icon=nav_icons[label],help=label,key='nav'+label,use_container_width=True,type='primary' if page==label else 'secondary',on_click=navigate,args=(label,))
 except ValueError as e:st.error(str(e))
 except psycopg.Error:st.error('저장소 연결이 불안정합니다. 잠시 후 다시 시도해 주세요. 같은 항목이 저장되었는지 먼저 확인해 주세요.')
