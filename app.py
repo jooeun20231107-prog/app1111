@@ -601,52 +601,69 @@ try:
                 st.write(m['text']);st.caption(m['name'])
                 if m['author']==user['id'] and st.button('추억 삭제',key='md'+ident):delete_item('memories',ident)
     else:
-        st.subheader('마이페이지')
-        with st.expander('우리 가족 캐릭터 이름'):
-            st.caption('가족 모두가 함께 쓰는 이름이에요. 가족 누구나 바꿀 수 있습니다.')
-            with st.form('character_name_form'):
-                pet_name=st.text_input('캐릭터 이름',value=data.get('character_name',''),max_chars=20,placeholder='가족이 함께 이름을 지어주세요')
-                submitted=st.form_submit_button('이름 저장',use_container_width=True)
-            if submitted:
-                if not pet_name.strip():
-                    st.warning('이름을 입력해 주세요.')
-                else:
-                    def rename_character(d,u):
-                        d['character_name']=pet_name.strip()
-                    mutate(rename_character)
-                    st.success('가족 캐릭터 이름을 저장했어요.')
-                    st.rerun()
+        st.markdown("""<style>
+.st-key-mysettings button{min-height:80px!important;border-radius:20px!important;background:#fffdf8!important;border:1px solid #e5e7dd!important;box-shadow:0 3px 10px #42574008!important;font-size:15px!important;white-space:normal!important}
+.st-key-mysettings button:hover{border-color:#7d9574!important;background:#f0f4eb!important}
+.lm-profile{display:flex;align-items:center;gap:14px;background:linear-gradient(120deg,#e8efdf,#f8f3e6);padding:20px;border-radius:24px;margin:6px 0 18px}
+.lm-avatar{display:grid;place-items:center;flex-shrink:0;width:54px;height:54px;border-radius:19px;background:#fffdf5;color:#4e6548;font-size:24px;font-weight:700}
+.lm-profile small{color:#526249}.lm-profile h3{padding:2px 0!important;margin:0!important;font-size:22px!important}
+.lm-members{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 18px}.lm-chip{background:#f0f1e9;border-radius:30px;padding:8px 13px;font-size:14px;color:#3e5142}
+</style>""",unsafe_allow_html=True)
+        st.markdown('<div class="lm-profile"><div class="lm-avatar">'+esc(user['name'][:1])+'</div><div><small>'+esc(family_name)+'</small><h3>'+esc(user['name'])+'님</h3><small>함께 쌓아가는 우리 가족의 하루</small></div></div>',unsafe_allow_html=True)
+        st.markdown('**우리 가족 · '+str(len(members))+'명**')
+        st.markdown('<div class="lm-members">'+''.join('<span class="lm-chip">'+esc(m['name'])+'</span>' for m in members)+'</div>',unsafe_allow_html=True)
+        selected_setting=None
+        with st.container(key='mysettings'):
+            for pair in [[('우리 가족 캐릭터 이름','✦  캐릭터 이름'),('가족 초대 QR','＋  가족 초대')],[('앱 접속 QR','▦  앱 QR 코드'),('비밀번호 변경','⚿  비밀번호')]]:
+                for col,(setting,label) in zip(st.columns(2),pair):
+                    if col.button(label,key='my_'+setting,use_container_width=True):selected_setting=setting
+        @st.dialog('설정')
+        def show_my_setting():
+            if selected_setting=='우리 가족 캐릭터 이름':
+                st.caption('가족 모두가 함께 쓰는 이름이에요. 가족 누구나 바꿀 수 있습니다.')
+                with st.form('character_name_form'):
+                    pet_name=st.text_input('캐릭터 이름',value=data.get('character_name',''),max_chars=20,placeholder='가족이 함께 이름을 지어주세요')
+                    submitted=st.form_submit_button('이름 저장',use_container_width=True)
+                if submitted:
+                    if not pet_name.strip():
+                        st.warning('이름을 입력해 주세요.')
+                    else:
+                        def rename_character(d,u):
+                            d['character_name']=pet_name.strip()
+                        mutate(rename_character)
+                        st.success('가족 캐릭터 이름을 저장했어요.')
+                        st.rerun()
 
-        with st.expander('비밀번호 변경'):
-            with st.form('password_change'):
-                old=st.text_input('현재 비밀번호',type='password',max_chars=128)
-                new=st.text_input('새 비밀번호',type='password',max_chars=128)
-                if st.form_submit_button('변경'):
-                    with db() as c:
-                        row=c.execute('SELECT password FROM public.lumora_users WHERE id=%s FOR UPDATE',(user['id'],)).fetchone()
-                        if len(new)>=8 and verify(old,row[0]):
-                            c.execute('UPDATE public.lumora_users SET password=%s WHERE id=%s',(password_hash(new),user['id']))
-                            c.execute('DELETE FROM public.lumora_sessions WHERE userid=%s AND token<>%s',(user['id'],digest(st.session_state['token'])))
-                            st.success('변경했습니다. 다른 기기의 로그인도 해제했어요.')
-                        else:st.error('현재 비밀번호 또는 새 비밀번호 길이를 확인해 주세요.')
-        st.subheader('가족 구성원')
-        for m in members:st.write(f'{m["name"]} · {m["role"]}')
-        with st.expander('가족 초대 QR'):
-            st.caption('초대 코드는 해시로 저장되어 다시 조회할 수 없습니다. 새로 발급하면 이전 코드는 즉시 무효가 됩니다.')
-            if st.button('초대 코드 새로 발급'):
-                code=secrets.token_urlsafe(18)
-                with db() as c:c.execute('UPDATE public.lumora_families SET invite=%s WHERE id=%s',(digest(code),user['family']))
-                st.session_state['invite_code']=code
-            if st.session_state.get('invite_code'):
-                code=st.session_state['invite_code'];st.code(code)
+            if selected_setting=='비밀번호 변경':
+                with st.form('password_change'):
+                    old=st.text_input('현재 비밀번호',type='password',max_chars=128)
+                    new=st.text_input('새 비밀번호',type='password',max_chars=128)
+                    if st.form_submit_button('변경'):
+                        with db() as c:
+                            row=c.execute('SELECT password FROM public.lumora_users WHERE id=%s FOR UPDATE',(user['id'],)).fetchone()
+                            if len(new)>=8 and verify(old,row[0]):
+                                c.execute('UPDATE public.lumora_users SET password=%s WHERE id=%s',(password_hash(new),user['id']))
+                                c.execute('DELETE FROM public.lumora_sessions WHERE userid=%s AND token<>%s',(user['id'],digest(st.session_state['token'])))
+                                st.success('변경했습니다. 다른 기기의 로그인도 해제했어요.')
+                            else:st.error('현재 비밀번호 또는 새 비밀번호 길이를 확인해 주세요.')
+            if selected_setting=='가족 초대 QR':
+                st.caption('초대 코드는 해시로 저장되어 다시 조회할 수 없습니다. 새로 발급하면 이전 코드는 즉시 무효가 됩니다.')
+                if st.button('초대 코드 새로 발급'):
+                    code=secrets.token_urlsafe(18)
+                    with db() as c:c.execute('UPDATE public.lumora_families SET invite=%s WHERE id=%s',(digest(code),user['family']))
+                    st.session_state['invite_code']=code
+                if st.session_state.get('invite_code'):
+                    code=st.session_state['invite_code'];st.code(code)
+                    share_url=app_share_url()
+                    if share_url:qr_download(share_url+'/?'+urlencode({'invite':code}),'초대 QR 저장')
+                    else:st.warning('앱 설정의 Secrets에서 APP_URL을 실제 루모라 주소로 설정해 주세요.')
+            if selected_setting=='앱 접속 QR':
                 share_url=app_share_url()
-                if share_url:qr_download(share_url+'/?'+urlencode({'invite':code}),'초대 QR 저장')
+                if share_url:qr_download(share_url,'앱 QR 저장')
                 else:st.warning('앱 설정의 Secrets에서 APP_URL을 실제 루모라 주소로 설정해 주세요.')
-        with st.expander('앱 접속 QR'):
-            share_url=app_share_url()
-            if share_url:qr_download(share_url,'앱 QR 저장')
-            else:st.warning('앱 설정의 Secrets에서 APP_URL을 실제 루모라 주소로 설정해 주세요.')
-        st.caption('로그인 유지 토큰은 30일 후 만료됩니다. 개인 편지는 가족에게 노출되지 않지만 서비스 DB 관리자에게까지 암호화하는 종단간 암호화는 아닙니다. 브라우저 쿠키는 HttpOnly가 아니므로 신뢰할 수 있는 기기에서만 로그인 유지를 사용하세요.')
+        if selected_setting:show_my_setting()
+        with st.popover('개인정보·로그인 안내'):
+            st.caption('로그인 유지 기간은 30일입니다. 공용 기기에서는 로그아웃해 주세요. 개인 편지는 서비스 관리자에게까지 암호화되는 종단간 암호화 방식이 아닙니다.')
         if st.button('로그아웃',use_container_width=True):
             with db() as c:c.execute('DELETE FROM public.lumora_sessions WHERE token=%s',(digest(st.session_state['token']),))
             cookies.remove('lumora_session')
