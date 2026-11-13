@@ -453,6 +453,22 @@ try:
 .st-key-lettergridTrue [data-testid="stColumn"],.st-key-lettergridFalse [data-testid="stColumn"]{width:auto!important;min-width:0!important}
 }
 </style>""",unsafe_allow_html=True)
+    goal_celebration=st.session_state.pop('_goal_celebration',None)
+    if goal_celebration:
+        @st.dialog('함께 이뤘어요!')
+        def show_goal_celebration():
+            st.balloons()
+            st.markdown("""<style>
+.lumora-goal-party{text-align:center;padding:22px 12px 28px;animation:goalBloom .55s ease-out both}
+.lumora-goal-party .medal{font-size:60px;margin-bottom:12px}
+.lumora-goal-party h2{font-size:26px!important;color:#526c48;margin:8px 0}
+.lumora-goal-party p{color:#6d7567;line-height:1.7;overflow-wrap:anywhere}
+@keyframes goalBloom{from{opacity:0;transform:scale(.88) translateY(14px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@media(prefers-reduced-motion:reduce){.lumora-goal-party{animation:none}}
+</style>""",unsafe_allow_html=True)
+            st.markdown('<div class="lumora-goal-party"><div class="medal">🎉</div><h2>우리 가족, 해냈어요!</h2><p><strong>'+esc(goal_celebration)+'</strong></p><p>함께 이룬 목표가<br>또 하나의 소중한 추억이 되었어요.</p></div>',unsafe_allow_html=True)
+            if st.button('좋아, 다음 추억도 함께!',key='close_goal_party',use_container_width=True):st.rerun()
+        show_goal_celebration()
     page=st.session_state.get('page','홈')
     st.markdown('<div class="brand">LUMORA</div>',unsafe_allow_html=True)
     points=sum(data.get('ledger',{}).values()); level=stage(points)
@@ -572,7 +588,14 @@ try:
                         item=d['buckets'][i];item['done']=not item['done'];item['done_date']=str(TODAY) if item['done'] else ''
                         if item['done'] and not item.get('rewarded'):
                             award(d,u,'bucket',8);item['rewarded']=True
-                    mutate(toggle);st.rerun()
+                    completed={}
+                    def complete_and_capture(d,u):
+                        toggle(d,u)
+                        if d['buckets'][ident]['done']:
+                            completed['title']=d['buckets'][ident]['title']
+                    mutate(complete_and_capture)
+                    if completed:st.session_state['_goal_celebration']=completed['title']
+                    st.rerun()
                 if b['author']==user['id'] and st.button('목표 삭제',key='bd'+ident):delete_item('buckets',ident)
         else:
             st.caption('공개 날짜는 한국 시간 기준입니다. 개인 편지는 작성자만 볼 수 있어요. 날짜 전에는 내용이 화면에 나타나지 않습니다.')
