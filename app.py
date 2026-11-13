@@ -116,6 +116,10 @@ html,body{height:100%;overflow:hidden!important;overscroll-behavior:none}
 [data-testid="stMainBlockContainer"],.block-container{min-height:0!important;padding-bottom:16px!important}
 [data-testid="stBottom"],[data-testid="stBottomBlockContainer"]{min-height:0!important;height:0!important;padding:0!important;margin:0!important}
 footer{display:none!important}
+
+.st-key-notificationbar [data-testid="stHorizontalBlock"]{flex-wrap:nowrap!important}
+.st-key-notificationbar [data-testid="stColumn"]{min-width:0!important}
+.st-key-notificationbar button{height:48px!important;min-width:76px!important;touch-action:manipulation;pointer-events:auto!important;position:relative;z-index:20}
 </style>'''
 st.markdown(CSS, unsafe_allow_html=True)
 
@@ -242,14 +246,18 @@ def envelope_image():
     from PIL import Image, ImageDraw
     canvas=Image.new('RGB',(800,400),'#faf7ef')
     draw=ImageDraw.Draw(canvas)
-    draw.rounded_rectangle((56,69,752,348),radius=24,fill='#e9dfcc')
-    draw.rounded_rectangle((48,57,744,336),radius=22,fill='#fff9e9',outline='#d8c9ad',width=3)
-    draw.polygon([(49,334),(397,143),(743,334)],fill='#eee2c9')
-    draw.polygon([(51,60),(741,60),(397,244)],fill='#f2e8d4',outline='#d8c9ad')
-    draw.ellipse((362,207,434,279),fill='#a66558',outline='#895044',width=3)
-    draw.ellipse((371,216,425,270),outline='#d6a398',width=2)
-    draw.line([(387,229),(387,256),(407,256)],fill='#f8dfb7',width=4)
+    draw.rounded_rectangle((72,82,738,342),radius=30,fill='#e9ece2')
+    draw.rounded_rectangle((64,68,730,328),radius=28,fill='#fffef9',outline='#e3e8dc',width=2)
+    draw.line([(69,319),(397,166),(725,319)],fill='#e9eddf',width=3)
+    draw.polygon([(77,77),(716,77),(397,235)],fill='#f0f4e9')
+    draw.rounded_rectangle((354,192,440,270),radius=26,fill='#7c9670')
+    draw.line([(380,212),(380,250),(415,250)],fill='#fffdf4',width=6)
+    draw.ellipse((410,208,419,217),fill='#e6d8a3')
     return canvas
+
+def can_read_letter(letter,viewer):
+    return (letter['author']==viewer['id'] or letter.get('visibility')=='가족'
+            or viewer['id'] in letter.get('recipients',[]))
 
 def letter_paper(letter,preview=False):
     content=letter.get('text','')
@@ -264,7 +272,7 @@ def letter_paper(letter,preview=False):
 def open_letter_archive():
     selected=st.session_state.get('_reading_letter')
     reading=data.get('letters',{}).get(selected)
-    if reading and reading['unlock']<=str(TODAY) and (reading['author']==user['id'] or reading['visibility']=='가족'):
+    if reading and reading['unlock']<=str(TODAY) and (can_read_letter(reading,user)):
         if st.button('닫기',icon=':material/close:',key='close_reading_letter'):
             st.session_state.pop('_reading_letter',None)
             st.rerun(scope='fragment')
@@ -274,7 +282,7 @@ def open_letter_archive():
     mine,family_tab=st.tabs(['나의 편지','가족이 공유한 편지'])
     for tab,is_mine in [(mine,True),(family_tab,False)]:
         with tab:
-            visible=[(i,l) for i,l in data.get('letters',{}).items() if (l['author']==user['id'] if is_mine else l['author']!=user['id'] and l['visibility']=='가족')]
+            visible=[(i,l) for i,l in data.get('letters',{}).items() if (l['author']==user['id'] if is_mine else l['author']!=user['id'] and can_read_letter(l,user))]
             if not visible:st.caption('보관된 편지가 없어요.')
             with st.container(key='lettergrid'+str(is_mine)):
                 cols=st.columns(3)
@@ -295,7 +303,7 @@ def open_letter_archive():
 
 @st.dialog('알림',width='large')
 def open_notifications():
-    visible=[l for l in data.get('letters',{}).values() if l['unlock']<=str(TODAY) and (l['author']==user['id'] or l['visibility']=='가족')]
+    visible=[l for l in data.get('letters',{}).values() if l['unlock']<=str(TODAY) and (can_read_letter(l,user))]
     if not visible:st.caption('아직 열어볼 편지가 없어요.')
     for l in sorted(visible,key=lambda x:x['unlock'],reverse=True):
         st.markdown('**편지가 도착했어요 · '+esc(l['title'])+'**')
@@ -463,9 +471,9 @@ try:
         st.success(notice)
         st.toast(notice,icon='✅')
     with st.container(key='notificationbar'):
-        left,right=st.columns([8,1])
+        left,right=st.columns([5,2],vertical_alignment='center')
         with right:
-            if st.button('',icon=':material/notifications:',help='공개된 편지 알림',key='notification_open'):open_notifications()
+            if st.button('알림',icon=':material/notifications:',help='공개된 편지 알림',key='notification_open',use_container_width=True):open_notifications()
     st.markdown("""<style>
 .st-key-notificationbar button{border:0!important;background:transparent!important;min-height:44px!important}
 .st-key-monthnav button{font-size:28px!important;min-height:48px!important}
@@ -503,7 +511,8 @@ try:
             for m in members:
                 mood=moods.get(f'{TODAY}:{m["id"]}',{})
                 card(m['name'],f'{mood.get("mood","아직 소식이 없어요")}  {mood.get("message","")}')
-            with st.popover('내 기분 남기기'):
+            @st.dialog('상세 보기')
+            def detail_panel_1():
                 with st.form('mood'):
                     mood=st.selectbox('가까운 감정 고르기',['행복함','평온함','피곤함','속상함','설렘','걱정됨','뿌듯함','감사함','신남','편안함','기대됨','그리움','외로움','서운함','답답함','불안함','화남','우울함','무기력함','혼란스러움','복잡한 마음','그저 그럼'])
                     custom_mood=st.text_input('내 감정을 직접 표현하기',placeholder='예: 기쁘면서도 아쉬워 / 이유 없이 마음이 복잡해')
@@ -512,6 +521,7 @@ try:
                     if st.form_submit_button('기분 저장'):
                         save_item('moods',{'mood':custom_mood.strip() or mood,'message':msg},itemid=f'{TODAY}:{user["id"]}')
 
+            if st.button('내 기분 남기기',key='detail_open_1_'+'1'):detail_panel_1()
         @st.dialog('오늘의 질문')
         def question_dialog():
             q=QUESTIONS[(date(2000,TODAY.month,TODAY.day)-date(2000,1,1)).days]
@@ -526,7 +536,8 @@ try:
                 if a['date']==str(TODAY):
                     card(a['name'],a['text'])
                     if a['author']==user['id'] and st.button('답변 삭제',key='ad'+ident):delete_item('answers',ident)
-            with st.popover('지난 질문과 답변'):
+            @st.dialog('상세 보기')
+            def detail_panel_2():
                 for a in sorted(answers.values(),key=lambda x:x['created'],reverse=True):
                     if a['date']!=str(TODAY):
                         card(f'{a["date"]} · {a["name"]}',a['question']+'\n'+a['text'])
@@ -536,6 +547,7 @@ try:
                                 if st.form_submit_button('수정 저장') and edited.strip():save_item('answers',{'text':edited.strip(),'date':a['date'],'question':a['question']},itemid=a['date']+':'+a['author'])
                             if st.button('지난 답변 삭제',key='pastdel'+a['date']+a['author']):delete_item('answers',a['date']+':'+a['author'])
 
+            if st.button('지난 질문과 답변',key='detail_open_2_'+'2'):detail_panel_2()
         @st.dialog('가족 소식')
         def news_dialog():
             upcoming=sorted([x for x in data.get('events',{}).values() if x['date']>=str(TODAY)],key=lambda x:x['date'])[:3]
@@ -595,11 +607,13 @@ try:
             for ident,n in sorted(data.get('notes',{}).items(),key=lambda kv:(kv[1].get('pinned',False),kv[1]['created']),reverse=True):
                 card(('📌 ' if n.get('pinned') else '')+n['name']+' · '+n['created'][:16],n['text'])
                 if n['author']==user['id']:
-                    with st.popover('수정·삭제'):
+                    @st.dialog('상세 보기')
+                    def detail_panel_3():
                         with st.form('ne'+ident):
                             text=st.text_area('내용',n['text'],max_chars=2000);pin=st.checkbox('고정',n.get('pinned',False))
                             if st.form_submit_button('수정') and text.strip():save_item('notes',{'text':text.strip(),'pinned':pin},itemid=ident)
                         if st.button('삭제',key='nd'+ident):delete_item('notes',ident)
+                    if st.button('수정·삭제',key='detail_open_3_'+str(ident)):detail_panel_3()
         elif section=='버킷리스트':
             buckets=data.get('buckets',{});done=sum(bool(x.get('done')) for x in buckets.values())
             st.progress(done/max(1,len(buckets)),text=f'{done}/{len(buckets)}개 달성')
@@ -608,7 +622,10 @@ try:
                 st.caption('기록자: '+user['name'])
                 owner=user
                 if st.form_submit_button('목표 추가') and title.strip():save_item('buckets',{'title':title.strip(),'owner':owner['name'],'done':False,'done_date':''})
-            for ident,b in buckets.items():
+            bucket_view=st.segmented_control('목표 보기',['진행 중','이룬 일'],default='진행 중',key='bucket_view')
+            filtered=[(i,b) for i,b in buckets.items() if bool(b.get('done'))==(bucket_view=='이룬 일')]
+            if not filtered:st.caption('아직 이룬 일이 없어요.' if bucket_view=='이룬 일' else '진행 중인 목표가 없어요.')
+            for ident,b in sorted(filtered,key=lambda pair:pair[1].get('done_date',''),reverse=True):
                 card(('✓ ' if b['done'] else '○ ')+b['title'],f'기록자 {b["name"]} · 작성 {b["name"]}'+(' · 완료 '+b['done_date'] if b['done'] else ''))
                 if st.button('다시 진행' if b['done'] else '함께 완료했어요',key='bc'+ident):
                     def toggle(d,u,i=ident):
@@ -630,8 +647,13 @@ try:
                 title=st.text_input('편지 제목',max_chars=100)
                 text=st.text_area('미래에 전할 이야기',max_chars=5000)
                 unlock=st.date_input('공개 날짜',min_value=TODAY,value=TODAY+timedelta(days=30))
-                visibility=st.selectbox('받는 사람',['나만','가족'],format_func=lambda x:'나에게 보내기' if x=='나만' else '가족에게 공유하기')
-                if st.form_submit_button('편지 봉인') and title.strip() and text.strip():save_item('letters',{'title':title.strip(),'text':text.strip(),'unlock':str(unlock),'visibility':visibility})
+                visibility=st.radio('공개 범위',['나만','선택한 가족','가족'],horizontal=True,format_func=lambda x:'가족 전체' if x=='가족' else x)
+                recipient_ids=st.multiselect('받을 가족 선택 (선택한 가족 공개 시 적용)',[m['id'] for m in members if m['id']!=user['id']],format_func=lambda mid:next(m['name'] for m in members if m['id']==mid))
+                st.caption('선택한 가족 공개는 아래에서 사람을 고른 경우에만 봉인할 수 있어요.')
+                if st.form_submit_button('편지 봉인'):
+                    if not title.strip() or not text.strip():st.warning('제목과 내용을 작성해 주세요.')
+                    elif visibility=='선택한 가족' and not recipient_ids:st.warning('받을 가족을 선택해 주세요.')
+                    else:save_item('letters',{'title':title.strip(),'text':text.strip(),'unlock':str(unlock),'visibility':visibility,'recipients':recipient_ids if visibility=='선택한 가족' else []})
             if st.button('봉인된 편지 보기',icon=':material/mail:',use_container_width=True):open_letter_archive()
 
     elif page=='가족 캘린더':
@@ -678,7 +700,7 @@ try:
                 if e['date']!=str(selected):continue
                 card(e['title'],f'{e["kind"]} · {e["name"]}')
                 if e['author']==user['id']:
-                    with st.popover('일정 수정'):
+                    if st.button('일정 수정',key='event_edit_open_'+ident):
                         with st.form('ee'+ident):
                             title=st.text_input('제목',e['title'],max_chars=150);when=st.date_input('날짜',date.fromisoformat(e['date']))
                             current_kind=e.get('kind','일반')
@@ -738,11 +760,13 @@ try:
         day=st.date_input('확인할 날짜',value=TODAY) if filter_date else None
         for ident,m in sorted(data.get('memories',{}).items(),key=lambda kv:kv[1]['date'],reverse=True):
             if day and m['date']!=str(day):continue
-            with st.popover(f'{m["date"]} · {m["title"]}'):
+            @st.dialog('상세 보기')
+            def detail_panel_5():
                 try:st.image(base64.b64decode(m['photo']),use_container_width=True)
                 except Exception:st.caption('사진을 표시할 수 없어요.')
                 st.write(m['text']);st.caption(m['name'])
                 if m['author']==user['id'] and st.button('추억 삭제',key='md'+ident):delete_item('memories',ident)
+            if st.button(f'{m["date"]} · {m["title"]}',key='detail_open_5_'+str(ident)):detail_panel_5()
     else:
         st.markdown("""<style>
 .st-key-mysettings button{min-height:80px!important;border-radius:20px!important;background:#fffdf8!important;border:1px solid #e5e7dd!important;box-shadow:0 3px 10px #42574008!important;font-size:15px!important;white-space:normal!important}
@@ -805,8 +829,10 @@ try:
                 if share_url:qr_download(share_url,'앱 QR 저장')
                 else:st.warning('앱 설정의 Secrets에서 APP_URL을 실제 루모라 주소로 설정해 주세요.')
         if selected_setting:show_my_setting()
-        with st.popover('개인정보·로그인 안내'):
+        @st.dialog('상세 보기')
+        def detail_panel_6():
             st.caption('로그인 유지 기간은 30일입니다. 공용 기기에서는 로그아웃해 주세요. 개인 편지는 서비스 관리자에게까지 암호화되는 종단간 암호화 방식이 아닙니다.')
+        if st.button('개인정보·로그인 안내',key='detail_open_6_'+'6'):detail_panel_6()
         if st.button('로그아웃',use_container_width=True):
             with db() as c:c.execute('DELETE FROM public.lumora_sessions WHERE token=%s',(digest(st.session_state['token']),))
             cookies.remove('lumora_session')
