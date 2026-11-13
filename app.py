@@ -140,7 +140,7 @@ def session_user(token):
 
 def screen_user(token):
     cached=st.session_state.get('_screen_auth')
-    if token and cached and cached['token']==token and time.monotonic()-cached['at']<15:
+    if token and cached and cached['token']==token and time.monotonic()-cached['at']<30:
         return cached['user']
     result=session_user(token)
     st.session_state['_screen_auth']={'token':token,'at':time.monotonic(),'user':result}
@@ -154,7 +154,7 @@ def read_family_data(user):
 
 def family_data(user):
     cached=st.session_state.get('_family_snapshot')
-    if cached and cached['uid']==user['id'] and time.monotonic()-cached['at']<10:
+    if cached and cached['uid']==user['id'] and time.monotonic()-cached['at']<30:
         return cached['value']
     value=read_family_data(user)
     st.session_state['_family_snapshot']={'uid':user['id'],'at':time.monotonic(),'value':value}
@@ -287,7 +287,7 @@ def character(index,level):
         group,col=divmod(index,5);row=group*2+(1 if level==3 else 0)
         w,h=sheet.size
         im=sheet.crop((round(col*w/5),round(row*h/6),round((col+1)*w/5),round((row+1)*h/6)))
-    out=io.BytesIO(); im.save(out,format='PNG');return out.getvalue()
+    out=io.BytesIO(); im.convert('RGB').save(out,format='WEBP',quality=82,method=3);return out.getvalue()
 
 try:
     missing=[s for s in ['DATABASE_URL','APP_URL','AUTH_SECRET'] if not st.secrets.get(s)]
@@ -315,7 +315,7 @@ if not st.session_state.get('splash_done'):
 if not st.session_state.get('token'):
     restored=cookies.get('lumora_session')
     if restored: st.session_state['token']=restored
-try: user=session_user(st.session_state.get('token'))
+try: user=screen_user(st.session_state.get('token'))
 except Exception:
     st.error('연결이 잠시 불안정합니다. 잠시 후 새로고침해 주세요.');st.stop()
 
@@ -455,7 +455,7 @@ try:
             with st.popover('내 기분 남기기'):
                 with st.form('mood'):
                     mood=st.selectbox('가까운 감정 고르기',['행복함','평온함','피곤함','속상함','설렘','걱정됨','뿌듯함','감사함','신남','편안함','기대됨','그리움','외로움','서운함','답답함','불안함','화남','우울함','무기력함','혼란스러움','복잡한 마음','그저 그럼'])
-                    custom_mood=st.text_input('내 감정을 직접 표현하기',max_chars=80,placeholder='예: 기쁘면서도 아쉬워 / 이유 없이 마음이 복잡해')
+                    custom_mood=st.text_input('내 감정을 직접 표현하기',placeholder='예: 기쁘면서도 아쉬워 / 이유 없이 마음이 복잡해')
                     st.caption('직접 적으면 위에서 고른 감정 대신 이 표현이 저장돼요.')
                     msg=st.text_input('함께 전하고 싶은 말 (선택)',max_chars=120)
                     if st.form_submit_button('기분 저장'):
