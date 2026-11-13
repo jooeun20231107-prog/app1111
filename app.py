@@ -125,6 +125,19 @@ footer{display:none!important}
 .st-key-memorygrid [data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
 .st-key-memorygrid [data-testid="stColumn"]{width:auto!important;min-width:0!important}
 }
+
+/* Keep the notification bell at the viewport's outer-right edge. */
+.st-key-notificationbar{
+ position:fixed!important;
+ top:calc(env(safe-area-inset-top,0px) + 10px)!important;
+ right:calc(env(safe-area-inset-right,0px) + 8px)!important;
+ left:auto!important;width:48px!important;
+ z-index:1001!important;margin:0!important;padding:0!important;
+}
+.st-key-notificationbar [data-testid="stHorizontalBlock"]{gap:0!important;width:48px!important}
+.st-key-notificationbar [data-testid="stColumn"]:first-child{display:none!important}
+.st-key-notificationbar [data-testid="stColumn"]:last-child{width:48px!important;flex:0 0 48px!important}
+.st-key-notificationbar button{width:48px!important;min-width:48px!important;height:48px!important;padding:0!important;border-radius:50%!important}
 </style>'''
 st.markdown(CSS, unsafe_allow_html=True)
 
