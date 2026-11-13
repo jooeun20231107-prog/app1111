@@ -118,7 +118,6 @@ html,body{height:100%;overflow:hidden!important;overscroll-behavior:none}
 footer{display:none!important}
 
 .st-key-notificationbar [data-testid="stHorizontalBlock"]{flex-wrap:nowrap!important}
-.st-key-notificationbar [data-testid="stColumn"]{min-width:0!important}
 .st-key-notificationbar button{height:48px!important;min-width:76px!important;touch-action:manipulation;pointer-events:auto!important;position:relative;z-index:20}
 
 @media(max-width:640px){
@@ -135,8 +134,6 @@ footer{display:none!important}
  z-index:1001!important;margin:0!important;padding:0!important;
 }
 .st-key-notificationbar [data-testid="stHorizontalBlock"]{gap:0!important;width:48px!important}
-.st-key-notificationbar [data-testid="stColumn"]:first-child{display:none!important}
-.st-key-notificationbar [data-testid="stColumn"]:last-child{width:48px!important;flex:0 0 48px!important}
 .st-key-notificationbar button{width:48px!important;min-width:48px!important;height:48px!important;padding:0!important;border-radius:50%!important}
 
 /* Place the app notification bell in the upper-left marked position. */
@@ -154,6 +151,22 @@ footer{display:none!important}
 .st-key-recipient_choices button[kind="secondary"]{background:#fffdf8!important;border:1px solid #dedfd3!important;color:#53604e!important}
 .st-key-recipient_choices [data-testid="stHorizontalBlock"]{flex-wrap:nowrap!important}
 .st-key-recipient_choices [data-testid="stColumn"]{min-width:0!important;flex:1!important}
+
+/* A single clickable bell; no hidden column or overlapping layout. */
+.st-key-notificationbar{
+ position:fixed!important;left:auto!important;
+ right:calc(env(safe-area-inset-right,0px) + 12px)!important;
+ top:calc(env(safe-area-inset-top,0px) + 12px)!important;
+ width:48px!important;height:48px!important;
+ z-index:9990!important;pointer-events:auto!important;
+ margin:0!important;padding:0!important;
+}
+.st-key-notificationbar button{
+ width:48px!important;min-width:48px!important;height:48px!important;
+ cursor:pointer!important;pointer-events:auto!important;touch-action:manipulation;
+ background:#fffdf5!important;border:1px solid #e4e7da!important;
+ border-radius:50%!important;box-shadow:0 2px 8px #33452a10;
+}
 </style>'''
 st.markdown(CSS, unsafe_allow_html=True)
 
@@ -564,9 +577,7 @@ try:
         st.success(notice)
         st.toast(notice,icon='✅')
     with st.container(key='notificationbar'):
-        left,right=st.columns([5,2],vertical_alignment='center')
-        with right:
-            if st.button('',icon=':material/notifications:',help='가족 소식 알림',key='notification_open',use_container_width=True):open_notifications()
+        if st.button('',icon=':material/notifications:',help='가족 소식 알림',key='notification_open',use_container_width=True):open_notifications()
     st.markdown("""<style>
 .st-key-notificationbar button{border:0!important;background:transparent!important;min-height:44px!important}
 .st-key-monthnav button{font-size:28px!important;min-height:48px!important}
