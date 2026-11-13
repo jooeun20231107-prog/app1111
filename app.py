@@ -96,6 +96,12 @@ header[data-testid="stHeader"]{background:transparent}#MainMenu,footer{visibilit
 .st-key-clickcalendar{margin-top:0!important}
 .calendar-weekday{padding:2px 0!important}
 .calendar-dots{margin-top:0!important;line-height:10px!important;min-height:10px!important;font-size:9px!important}
+
+/* Hide textarea keyboard instructions and character counter; preserve input labels/errors. */
+[data-testid="stTextArea"] [data-testid="InputInstructions"],
+[data-testid="stTextArea"] [data-testid="stInputInstructions"] {
+    display: none !important;
+}
 </style>'''
 st.markdown(CSS, unsafe_allow_html=True)
 
