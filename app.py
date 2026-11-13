@@ -248,17 +248,31 @@ def app_share_url():
 
 @st.cache_data(show_spinner=False)
 def envelope_image():
-    from PIL import Image, ImageDraw
-    canvas=Image.new('RGB',(800,400),'#faf7ef')
-    draw=ImageDraw.Draw(canvas)
-    draw.rounded_rectangle((72,82,738,342),radius=30,fill='#e9ece2')
-    draw.rounded_rectangle((64,68,730,328),radius=28,fill='#fffef9',outline='#e3e8dc',width=2)
-    draw.line([(69,319),(397,166),(725,319)],fill='#e9eddf',width=3)
-    draw.polygon([(77,77),(716,77),(397,235)],fill='#f0f4e9')
-    draw.rounded_rectangle((354,192,440,270),radius=26,fill='#7c9670')
-    draw.line([(380,212),(380,250),(415,250)],fill='#fffdf4',width=6)
-    draw.ellipse((410,208,419,217),fill='#e6d8a3')
-    return canvas
+    from PIL import Image, ImageDraw, ImageFilter, ImageFont
+    canvas=Image.new('RGB',(1000,620),'#f6f4ec')
+    shadow=Image.new('RGBA',canvas.size,(0,0,0,0));d=ImageDraw.Draw(shadow)
+    d.rounded_rectangle((116,140,894,511),radius=18,fill=(65,77,51,32))
+    canvas=Image.alpha_composite(canvas.convert('RGBA'),shadow.filter(ImageFilter.GaussianBlur(17)))
+    d=ImageDraw.Draw(canvas)
+    d.rounded_rectangle((105,115,885,490),radius=16,fill='#fdfcf6',outline='#e4e5d9',width=2)
+    d.polygon([(110,482),(496,264),(880,482)],fill='#eeeede')
+    d.polygon([(111,126),(498,363),(879,126)],fill='#dce6d1')
+    d.line([(113,130),(498,367),(878,130)],fill='#cbd6bf',width=3)
+    d.line([(115,478),(350,343)],fill='#dddfce',width=2)
+    d.line([(877,478),(646,343)],fill='#dddfce',width=2)
+    # A narrow sage ribbon and gold-edged modern brand seal.
+    d.rounded_rectangle((477,118,519,479),radius=3,fill='#e8ecdf')
+    d.ellipse((446,296,552,402),fill='#e7d8ad')
+    d.ellipse((451,301,547,397),fill='#73896b')
+    d.arc((458,308,540,390),20,335,fill='#aabb96',width=2)
+    d.line([(482,324),(482,374),(516,374)],fill='#fffcef',width=5)
+    d.ellipse((514,322,523,331),fill='#eedaaa')
+    # Restrained botanical sprig on the lower left of the envelope.
+    d.line([(151,450),(207,394)],fill='#91a081',width=3)
+    for x,y in [(163,436),(180,418),(196,402)]:
+        d.ellipse((x-13,y-15,x+2,y-1),fill='#b6c2a4')
+        d.ellipse((x+2,y-1,x+18,y+11),fill='#c6cfb7')
+    return canvas.convert('RGB')
 
 def can_read_letter(letter,viewer):
     return (letter['author']==viewer['id'] or letter.get('visibility')=='가족'
@@ -267,11 +281,24 @@ def can_read_letter(letter,viewer):
 def letter_paper(letter,preview=False):
     content=letter.get('text','')
     if preview and len(content)>150:content=content[:150]+'…'
-    return ('<div style="background:#fffdf5;border:1px solid #e9e1cf;border-radius:14px;'
-        'box-shadow:0 8px 24px #665b3310;padding:'+('18px' if preview else '32px 24px')+';'
-        'min-height:'+('150px' if preview else '300px')+';color:#485044;overflow-wrap:anywhere">'
-        '<div style="font-size:'+('16px' if preview else '23px')+';font-weight:650;margin-bottom:16px">'+esc(letter['title'])+'</div>'
-        '<div style="white-space:pre-wrap;font-size:'+('14px' if preview else '18px')+';line-height:1.95">'+esc(content)+'</div></div>')
+    pad='16px' if preview else '32px'
+    size='14px' if preview else '18px'
+    return ('<article style="position:relative;background:#fffdf6;'
+        'border:1px solid #e6dfcc;border-radius:3px 3px 14px 3px;'
+        'box-shadow:3px 5px 0 #ece9dd,0 12px 28px #5f573414;'
+        'padding:'+pad+';min-height:'+('190px' if preview else '380px')+';'
+        'color:#4b5146;overflow-wrap:anywhere;">'
+        '<div style="display:flex;justify-content:space-between;align-items:center;'
+        'border-bottom:1px solid #cec8ae;padding-bottom:12px;margin-bottom:18px;'
+        'font-size:10px;letter-spacing:2px;color:#8a967a">'
+        '<span>LUMORA</span><span>✦</span></div>'
+        '<div style="font-size:'+('17px' if preview else '24px')+';font-weight:600;'
+        'color:#53664b;margin:0 0 18px;line-height:1.5">'+esc(letter['title'])+'</div>'
+        '<div style="white-space:pre-wrap;font-size:'+size+';line-height:32px;'
+        'min-height:128px;background-image:repeating-linear-gradient(to bottom,'
+        'transparent 0px,transparent 30px,#e5e2d3 31px,transparent 32px);">'+esc(content)+'</div>'
+        '<div style="text-align:right;font-size:12px;color:#8a8c7c;margin-top:22px;'
+        'padding-top:10px">From. '+esc(letter.get('name',''))+'</div></article>')
 
 @st.dialog('편지 보관함',width='large')
 def open_letter_archive():
