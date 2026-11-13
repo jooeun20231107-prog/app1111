@@ -145,6 +145,8 @@ footer{display:none!important}
  right:auto!important;
  top:calc(env(safe-area-inset-top,0px) + 10px)!important;
 }
+
+.st-key-letter_compose [data-testid="stSegmentedControl"] button{pointer-events:auto!important;touch-action:manipulation;min-height:44px!important}
 </style>'''
 st.markdown(CSS, unsafe_allow_html=True)
 
@@ -257,6 +259,7 @@ def save_item(collection, payload, reward=None, itemid=None):
         items[ident]={**payload,'author':user['id'],'name':user['name'],'created':old['created'] if old else now()}
         if reward: award(data,user,*reward)
     mutate(action)
+    if collection=='letters':st.session_state['_reset_letter_draft']=True
     messages={'notes':'메모를 남겼습니다.','letters':'편지를 봉인했습니다.','buckets':'가족 목표를 추가했습니다.','events':'일정을 저장했습니다.','memories':'추억을 저장했습니다.'}
     messages.update({'moods':'오늘의 기분을 기록했어요.','answers':'오늘의 질문에 답변을 남겼어요.'})
     st.session_state['_save_notice']=messages.get(collection,'저장했습니다.') if collection in ('moods','answers') or not itemid else '수정했습니다.'
@@ -726,22 +729,25 @@ try:
                 if b['author']==user['id'] and st.button('목표 삭제',key='bd'+ident):delete_item('buckets',ident)
         else:
             st.caption('공개 날짜는 한국 시간 기준입니다. 개인 편지는 작성자만 볼 수 있어요. 날짜 전에는 내용이 화면에 나타나지 않습니다.')
-            with st.form('letter',clear_on_submit=True):
-                title=st.text_input('편지 제목',max_chars=100)
-                text=st.text_area('미래에 전할 이야기',max_chars=5000)
-                unlock=st.date_input('공개 날짜',min_value=TODAY,value=TODAY+timedelta(days=30))
+            if st.session_state.pop('_reset_letter_draft',False):
+                for draft_key in ['letter_draft_title','letter_draft_text','letter_draft_unlock','letter_recipient_buttons']:
+                    st.session_state.pop(draft_key,None)
+            with st.container(key='letter_compose'):
+                title=st.text_input('편지 제목',max_chars=100,key='letter_draft_title')
+                text=st.text_area('미래에 전할 이야기',max_chars=5000,key='letter_draft_text')
+                unlock=st.date_input('공개 날짜',min_value=TODAY,value=TODAY+timedelta(days=30),key='letter_draft_unlock')
                 recipient_options=['self','all']+[m['id'] for m in members if m['id']!=user['id']]
                 recipient_labels={'self':'나에게','all':'가족 전체',**{m['id']:m['name'] for m in members if m['id']!=user['id']}}
                 chosen_recipients=st.segmented_control('받는 사람',options=recipient_options,selection_mode='multi',default=['self'],format_func=lambda value:recipient_labels[value],key='letter_recipient_buttons')
-                if 'all' in chosen_recipients:
+                if 'all' in (chosen_recipients or []):
                     visibility='가족'
                     recipient_ids=[]
                 else:
-                    recipient_ids=[mid for mid in chosen_recipients if mid not in ('self','all')]
-                    if 'self' in chosen_recipients:recipient_ids.append(user['id'])
+                    recipient_ids=[mid for mid in (chosen_recipients or []) if mid not in ('self','all')]
+                    if 'self' in (chosen_recipients or []):recipient_ids.append(user['id'])
                     visibility='선택한 가족' if any(mid!=user['id'] for mid in recipient_ids) else '나만'
                 st.caption('이름 버튼을 눌러 여러 명을 고를 수 있어요. 가족 전체를 고르면 다른 선택보다 우선합니다. 보낸 편지는 나도 보관함에서 확인할 수 있어요.')
-                if st.form_submit_button('편지 봉인'):
+                if st.button('편지 봉인',key='seal_letter_submit'):
                     if not title.strip() or not text.strip():st.warning('제목과 내용을 작성해 주세요.')
                     elif not chosen_recipients:st.warning('받을 사람을 선택해 주세요.')
                     else:save_item('letters',{'title':title.strip(),'text':text.strip(),'unlock':str(unlock),'visibility':visibility,'recipients':recipient_ids if visibility=='선택한 가족' else []})
