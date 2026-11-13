@@ -120,6 +120,11 @@ footer{display:none!important}
 .st-key-notificationbar [data-testid="stHorizontalBlock"]{flex-wrap:nowrap!important}
 .st-key-notificationbar [data-testid="stColumn"]{min-width:0!important}
 .st-key-notificationbar button{height:48px!important;min-width:76px!important;touch-action:manipulation;pointer-events:auto!important;position:relative;z-index:20}
+
+@media(max-width:640px){
+.st-key-memorygrid [data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+.st-key-memorygrid [data-testid="stColumn"]{width:auto!important;min-width:0!important}
+}
 </style>'''
 st.markdown(CSS, unsafe_allow_html=True)
 
@@ -756,17 +761,41 @@ try:
                         im=ImageOps.exif_transpose(Image.open(photo));im.thumbnail((1400,1400));im=im.convert('RGB');buf=io.BytesIO();im.save(buf,'JPEG',quality=82)
                         save_item('memories',{'title':title.strip(),'date':str(when),'text':text.strip(),'photo':base64.b64encode(buf.getvalue()).decode()},('memory',5))
                     except (OSError,ValueError,Image.DecompressionBombError):st.error('사진을 읽지 못했습니다. 다른 사진으로 시도해 주세요.')
-        filter_date=st.checkbox('날짜로 찾기')
-        day=st.date_input('확인할 날짜',value=TODAY) if filter_date else None
-        for ident,m in sorted(data.get('memories',{}).items(),key=lambda kv:kv[1]['date'],reverse=True):
-            if day and m['date']!=str(day):continue
-            @st.dialog('상세 보기')
-            def detail_panel_5():
-                try:st.image(base64.b64decode(m['photo']),use_container_width=True)
+        @st.dialog('우리 가족 추억',width='large')
+        def memory_archive():
+            chosen=st.session_state.get('_reading_memory')
+            memory=data.get('memories',{}).get(chosen)
+            if memory:
+                if st.button('추억 목록으로',icon=':material/arrow_back:',key='memory_back'):
+                    st.session_state.pop('_reading_memory',None)
+                    st.rerun(scope='fragment')
+                st.subheader(memory['title'])
+                try:st.image(base64.b64decode(memory['photo']),use_container_width=True)
                 except Exception:st.caption('사진을 표시할 수 없어요.')
-                st.write(m['text']);st.caption(m['name'])
-                if m['author']==user['id'] and st.button('추억 삭제',key='md'+ident):delete_item('memories',ident)
-            if st.button(f'{m["date"]} · {m["title"]}',key='detail_open_5_'+str(ident)):detail_panel_5()
+                st.write(memory.get('text',''))
+                st.caption(memory['date']+' · '+memory['name'])
+                if memory['author']==user['id'] and st.button('추억 삭제',key='memory_delete_'+chosen):delete_item('memories',chosen)
+                return
+            date_filter=st.checkbox('날짜로 찾기',key='memory_archive_filter')
+            day=st.date_input('확인할 날짜',value=TODAY,key='memory_archive_day') if date_filter else None
+            items=[(i,m) for i,m in sorted(data.get('memories',{}).items(),key=lambda kv:kv[1]['date'],reverse=True) if not day or m['date']==str(day)]
+            if not items:st.caption('아직 표시할 추억이 없어요.')
+            with st.container(key='memorygrid'):
+                cols=st.columns(3)
+                for n,(ident,m) in enumerate(items):
+                    with cols[n%3]:
+                        with st.container(border=True):
+                            try:st.image(base64.b64decode(m['photo']),use_container_width=True)
+                            except Exception:st.caption('사진을 표시할 수 없어요.')
+                            st.markdown('**'+esc(m['title'])+'**')
+                            st.caption(m['date']+' · '+m['name'])
+                            if st.button('추억 열기',key='memory_open_'+ident,use_container_width=True):
+                                st.session_state['_reading_memory']=ident
+                                st.rerun(scope='fragment')
+        if st.button('추억 보기',icon=':material/photo_library:',use_container_width=True):
+            st.session_state.pop('_reading_memory',None)
+            memory_archive()
+
     else:
         st.markdown("""<style>
 .st-key-mysettings button{min-height:80px!important;border-radius:20px!important;background:#fffdf8!important;border:1px solid #e5e7dd!important;box-shadow:0 3px 10px #42574008!important;font-size:15px!important;white-space:normal!important}
