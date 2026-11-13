@@ -108,6 +108,14 @@ header[data-testid="stHeader"]{background:transparent}#MainMenu,footer{visibilit
 [data-testid="stTextInput"] [data-testid="stInputInstructions"] {
     display: none !important;
 }
+
+/* One viewport app shell: eliminate document/footer overscroll. */
+html,body{height:100%;overflow:hidden!important;overscroll-behavior:none}
+[data-testid="stAppViewContainer"]{height:100dvh!important;overflow:hidden!important}
+[data-testid="stMain"]{height:calc(100dvh - 76px - env(safe-area-inset-bottom))!important;overflow-y:auto!important;overflow-x:hidden!important;overscroll-behavior-y:contain;scroll-padding-bottom:16px}
+[data-testid="stMainBlockContainer"],.block-container{min-height:0!important;padding-bottom:16px!important}
+[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]{min-height:0!important;height:0!important;padding:0!important;margin:0!important}
+footer{display:none!important}
 </style>'''
 st.markdown(CSS, unsafe_allow_html=True)
 
@@ -599,7 +607,7 @@ try:
                 if b['author']==user['id'] and st.button('목표 삭제',key='bd'+ident):delete_item('buckets',ident)
         else:
             st.caption('공개 날짜는 한국 시간 기준입니다. 개인 편지는 작성자만 볼 수 있어요. 날짜 전에는 내용이 화면에 나타나지 않습니다.')
-            with st.form('letter'):
+            with st.form('letter',clear_on_submit=True):
                 title=st.text_input('편지 제목',max_chars=100)
                 text=st.text_area('미래에 전할 이야기',max_chars=5000)
                 unlock=st.date_input('공개 날짜',min_value=TODAY,value=TODAY+timedelta(days=30))
