@@ -147,6 +147,13 @@ footer{display:none!important}
 }
 
 .st-key-letter_compose [data-testid="stSegmentedControl"] button{pointer-events:auto!important;touch-action:manipulation;min-height:44px!important}
+
+.st-key-recipient_choices button{min-height:46px!important;border-radius:14px!important}
+.st-key-recipient_choices button[kind="primary"]{background:#e1ebd9!important;border:1px solid #809873!important;color:#344e30!important}
+.st-key-recipient_choices button[kind="primary"] p{color:#344e30!important}
+.st-key-recipient_choices button[kind="secondary"]{background:#fffdf8!important;border:1px solid #dedfd3!important;color:#53604e!important}
+.st-key-recipient_choices [data-testid="stHorizontalBlock"]{flex-wrap:nowrap!important}
+.st-key-recipient_choices [data-testid="stColumn"]{min-width:0!important;flex:1!important}
 </style>'''
 st.markdown(CSS, unsafe_allow_html=True)
 
@@ -738,7 +745,25 @@ try:
                 unlock=st.date_input('공개 날짜',min_value=TODAY,value=TODAY+timedelta(days=30),key='letter_draft_unlock')
                 recipient_options=['self','all']+[m['id'] for m in members if m['id']!=user['id']]
                 recipient_labels={'self':'나에게','all':'가족 전체',**{m['id']:m['name'] for m in members if m['id']!=user['id']}}
-                chosen_recipients=st.segmented_control('받는 사람',options=recipient_options,selection_mode='multi',default=['self'],format_func=lambda value:recipient_labels[value],key='letter_recipient_buttons')
+                st.caption('받는 사람')
+                if not isinstance(st.session_state.get('letter_recipient_buttons'),list):
+                    st.session_state['letter_recipient_buttons']=['self']
+                def toggle_letter_recipient(recipient):
+                    selected=list(st.session_state.get('letter_recipient_buttons',['self']))
+                    if recipient in selected:selected.remove(recipient)
+                    elif recipient=='all':selected=['all']
+                    else:
+                        selected=[value for value in selected if value!='all']
+                        selected.append(recipient)
+                    st.session_state['letter_recipient_buttons']=selected
+                with st.container(key='recipient_choices'):
+                    for start in range(0,len(recipient_options),2):
+                        for col,recipient in zip(st.columns(2),recipient_options[start:start+2]):
+                            active=recipient in st.session_state['letter_recipient_buttons']
+                            col.button(('✓ ' if active else '')+recipient_labels[recipient],key='recipient_choice_'+recipient,
+                                type='primary' if active else 'secondary',use_container_width=True,
+                                on_click=toggle_letter_recipient,args=(recipient,))
+                chosen_recipients=st.session_state['letter_recipient_buttons']
                 if 'all' in (chosen_recipients or []):
                     visibility='가족'
                     recipient_ids=[]
