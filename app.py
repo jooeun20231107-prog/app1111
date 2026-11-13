@@ -177,9 +177,13 @@ def screen_user(token):
 
 def read_family_data(user):
     with db() as c:
-        row=c.execute('SELECT f.name,f.data FROM public.lumora_families f JOIN public.lumora_users u ON u.family=f.id WHERE u.id=%s AND f.id=%s',(user['id'],user['family'])).fetchone()
-        members=c.execute('SELECT id,name,role,blood FROM public.lumora_users WHERE family=%s ORDER BY id',(user['family'],)).fetchall()
-    return row[0],row[1],[dict(zip(['id','name','role','blood'],m)) for m in members]
+        row=c.execute("""SELECT f.name,f.data,
+            COALESCE((SELECT jsonb_agg(jsonb_build_object('id',m.id,'name',m.name,'role',m.role,'blood',m.blood) ORDER BY m.id)
+            FROM public.lumora_users m WHERE m.family=f.id),'[]'::jsonb)
+            FROM public.lumora_families f JOIN public.lumora_users u ON u.family=f.id
+            WHERE u.id=%s AND f.id=%s""",(user['id'],user['family'])).fetchone()
+    if not row:raise ValueError('가족 정보를 확인할 수 없습니다.')
+    return row[0],row[1],row[2]
 
 def family_data(user):
     cached=st.session_state.get('_family_snapshot')
@@ -205,7 +209,14 @@ def mutate(fn):
         data=row[0]
         fn(data,user)
         c.execute('UPDATE public.lumora_families SET data=%s WHERE id=%s',(Jsonb(data),user['family']))
-    refresh_family()
+    # Reuse the committed record instead of downloading all photos and letters again.
+    cached=st.session_state.get('_family_snapshot')
+    if cached and cached['uid']==user['id']:
+        family_name,_,members=cached['value']
+        st.session_state['_family_snapshot']={'uid':user['id'],'at':time.monotonic(),
+            'value':(family_name,data,members)}
+    else:
+        refresh_family()
 
 def award(data,user,activity,points):
     # One reward per activity per member per KST day; edits/deletions never reset ledger.
@@ -335,20 +346,40 @@ def open_letter_archive():
 
 @st.dialog('알림',width='large')
 def open_notifications():
-    visible=[l for l in data.get('letters',{}).values() if l['unlock']<=str(TODAY) and (can_read_letter(l,user))]
-    if not visible:st.caption('아직 열어볼 편지가 없어요.')
-    for l in sorted(visible,key=lambda x:x['unlock'],reverse=True):
-        st.markdown('**편지가 도착했어요 · '+esc(l['title'])+'**')
-        st.caption(l['name']+' · '+l['unlock'])
-        st.write(l['text'])
-    st.caption('앱 안에서 확인하는 알림입니다. 휴대전화 푸시 알림은 제공하지 않습니다.')
+    alerts=[]
+    for l in data.get('letters',{}).values():
+        if l['unlock']<=str(TODAY) and can_read_letter(l,user):
+            alerts.append((l['unlock'],'✉️ 편지를 열어볼 수 있어요',l['title'],l['name']))
+    for collection,label,field in [('notes','💬 가족 메모가 도착했어요','text'),('memories','📷 새로운 추억을 남겼어요','title'),('answers','💡 오늘의 질문에 답했어요','text'),('moods','🌿 가족의 기분이 도착했어요','mood')]:
+        for item in data.get(collection,{}).values():
+            if item.get('author')!=user['id']:
+                alerts.append((item.get('created',''),label,item.get(field,''),item.get('name','가족')))
+    for item in data.get('events',{}).values():
+        when=item.get('date','')
+        if str(TODAY)<=when<=str(TODAY+timedelta(days=7)):
+            alerts.append((when,'📅 다가오는 가족 일정',item.get('title',''),when+' · '+item.get('name','가족')))
+        elif item.get('author')!=user['id']:
+            alerts.append((item.get('created',''),'📅 가족 일정이 등록됐어요',item.get('title',''),item.get('name','가족')))
+    for item in data.get('buckets',{}).values():
+        if item.get('done'):
+            alerts.append((item.get('done_date',''),'🎉 가족 목표를 이뤘어요',item.get('title',''),item.get('done_date','')))
+        elif item.get('author')!=user['id']:
+            alerts.append((item.get('created',''),'🌱 새로운 가족 목표',item.get('title',''),item.get('name','가족')))
+    if not alerts:st.caption('아직 새로운 소식이 없어요.')
+    for when,title,body,by in sorted(alerts,key=lambda item:item[0],reverse=True)[:50]:
+        with st.container(border=True):
+            st.markdown('**'+title+'**')
+            st.write(body)
+            st.caption(by)
+    st.caption('최근 소식 최대 50개를 모아 보여줍니다. 앱 내부 알림이며 푸시·읽음 관리는 제공하지 않습니다.')
+
 
 def qr_download(url,label):
     im=qrcode.make(url); buf=io.BytesIO(); im.save(buf,format='PNG')
     st.image(buf.getvalue(),width=180)
     st.download_button(label,buf.getvalue(),file_name='lumora_qr.png',mime='image/png')
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def character(index,level):
     if level<2:
         im=Image.new('RGB',(480,440),'#faf7ef'); d=ImageDraw.Draw(im)
@@ -505,7 +536,7 @@ try:
     with st.container(key='notificationbar'):
         left,right=st.columns([5,2],vertical_alignment='center')
         with right:
-            if st.button('알림',icon=':material/notifications:',help='공개된 편지 알림',key='notification_open',use_container_width=True):open_notifications()
+            if st.button('',icon=':material/notifications:',help='가족 소식 알림',key='notification_open',use_container_width=True):open_notifications()
     st.markdown("""<style>
 .st-key-notificationbar button{border:0!important;background:transparent!important;min-height:44px!important}
 .st-key-monthnav button{font-size:28px!important;min-height:48px!important}
