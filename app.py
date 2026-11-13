@@ -138,6 +138,13 @@ footer{display:none!important}
 .st-key-notificationbar [data-testid="stColumn"]:first-child{display:none!important}
 .st-key-notificationbar [data-testid="stColumn"]:last-child{width:48px!important;flex:0 0 48px!important}
 .st-key-notificationbar button{width:48px!important;min-width:48px!important;height:48px!important;padding:0!important;border-radius:50%!important}
+
+/* Place the app notification bell in the upper-left marked position. */
+.st-key-notificationbar{
+ left:calc(env(safe-area-inset-left,0px) + 8px)!important;
+ right:auto!important;
+ top:calc(env(safe-area-inset-top,0px) + 10px)!important;
+}
 </style>'''
 st.markdown(CSS, unsafe_allow_html=True)
 
@@ -723,12 +730,20 @@ try:
                 title=st.text_input('편지 제목',max_chars=100)
                 text=st.text_area('미래에 전할 이야기',max_chars=5000)
                 unlock=st.date_input('공개 날짜',min_value=TODAY,value=TODAY+timedelta(days=30))
-                visibility=st.radio('공개 범위',['나만','선택한 가족','가족'],horizontal=True,format_func=lambda x:'가족 전체' if x=='가족' else x)
-                recipient_ids=st.multiselect('받을 가족 선택 (선택한 가족 공개 시 적용)',[m['id'] for m in members if m['id']!=user['id']],format_func=lambda mid:next(m['name'] for m in members if m['id']==mid))
-                st.caption('선택한 가족 공개는 아래에서 사람을 고른 경우에만 봉인할 수 있어요.')
+                recipient_options=['self','all']+[m['id'] for m in members if m['id']!=user['id']]
+                recipient_labels={'self':'나에게','all':'가족 전체',**{m['id']:m['name'] for m in members if m['id']!=user['id']}}
+                chosen_recipients=st.segmented_control('받는 사람',options=recipient_options,selection_mode='multi',default=['self'],format_func=lambda value:recipient_labels[value],key='letter_recipient_buttons')
+                if 'all' in chosen_recipients:
+                    visibility='가족'
+                    recipient_ids=[]
+                else:
+                    recipient_ids=[mid for mid in chosen_recipients if mid not in ('self','all')]
+                    if 'self' in chosen_recipients:recipient_ids.append(user['id'])
+                    visibility='선택한 가족' if any(mid!=user['id'] for mid in recipient_ids) else '나만'
+                st.caption('이름 버튼을 눌러 여러 명을 고를 수 있어요. 가족 전체를 고르면 다른 선택보다 우선합니다. 보낸 편지는 나도 보관함에서 확인할 수 있어요.')
                 if st.form_submit_button('편지 봉인'):
                     if not title.strip() or not text.strip():st.warning('제목과 내용을 작성해 주세요.')
-                    elif visibility=='선택한 가족' and not recipient_ids:st.warning('받을 가족을 선택해 주세요.')
+                    elif not chosen_recipients:st.warning('받을 사람을 선택해 주세요.')
                     else:save_item('letters',{'title':title.strip(),'text':text.strip(),'unlock':str(unlock),'visibility':visibility,'recipients':recipient_ids if visibility=='선택한 가족' else []})
             if st.button('봉인된 편지 보기',icon=':material/mail:',use_container_width=True):open_letter_archive()
 
