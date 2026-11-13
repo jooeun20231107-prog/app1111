@@ -218,7 +218,8 @@ def save_item(collection, payload, reward=None, itemid=None):
         if reward: award(data,user,*reward)
     mutate(action)
     messages={'notes':'메모를 남겼습니다.','letters':'편지를 봉인했습니다.','buckets':'가족 목표를 추가했습니다.','events':'일정을 저장했습니다.','memories':'추억을 저장했습니다.'}
-    st.session_state['_save_notice']='수정했습니다.' if itemid else messages.get(collection,'저장했습니다.')
+    messages.update({'moods':'오늘의 기분을 기록했어요.','answers':'오늘의 질문에 답변을 남겼어요.'})
+    st.session_state['_save_notice']=messages.get(collection,'저장했습니다.') if collection in ('moods','answers') or not itemid else '수정했습니다.'
     st.rerun()
 
 def delete_item(collection,ident):
@@ -250,9 +251,27 @@ def envelope_image():
     draw.line([(387,229),(387,256),(407,256)],fill='#f8dfb7',width=4)
     return canvas
 
+def letter_paper(letter,preview=False):
+    content=letter.get('text','')
+    if preview and len(content)>150:content=content[:150]+'…'
+    return ('<div style="background:#fffdf5;border:1px solid #e9e1cf;border-radius:14px;'
+        'box-shadow:0 8px 24px #665b3310;padding:'+('18px' if preview else '32px 24px')+';'
+        'min-height:'+('150px' if preview else '300px')+';color:#485044;overflow-wrap:anywhere">'
+        '<div style="font-size:'+('16px' if preview else '23px')+';font-weight:650;margin-bottom:16px">'+esc(letter['title'])+'</div>'
+        '<div style="white-space:pre-wrap;font-size:'+('14px' if preview else '18px')+';line-height:1.95">'+esc(content)+'</div></div>')
+
 @st.dialog('편지 보관함',width='large')
 def open_letter_archive():
-    mine,family_tab=st.tabs(['나의 봉인된 편지','가족이 공유한 편지'])
+    selected=st.session_state.get('_reading_letter')
+    reading=data.get('letters',{}).get(selected)
+    if reading and reading['unlock']<=str(TODAY) and (reading['author']==user['id'] or reading['visibility']=='가족'):
+        if st.button('닫기',icon=':material/close:',key='close_reading_letter'):
+            st.session_state.pop('_reading_letter',None)
+            st.rerun(scope='fragment')
+        st.caption(reading['name']+' · '+reading['unlock'])
+        st.markdown(letter_paper(reading),unsafe_allow_html=True)
+        return
+    mine,family_tab=st.tabs(['나의 편지','가족이 공유한 편지'])
     for tab,is_mine in [(mine,True),(family_tab,False)]:
         with tab:
             visible=[(i,l) for i,l in data.get('letters',{}).items() if (l['author']==user['id'] if is_mine else l['author']!=user['id'] and l['visibility']=='가족')]
@@ -262,21 +281,17 @@ def open_letter_archive():
                 for n,(ident,l) in enumerate(sorted(visible,key=lambda pair:pair[1]['unlock'])):
                     with cols[n%3]:
                         with st.container(border=True):
-                            st.image(envelope_image(),use_container_width=True)
-                            st.markdown('**'+esc(l['title'])+'**')
-                            st.caption(l['name']+' · '+l['unlock'])
                             if l['unlock']<=str(TODAY):
-                                st.caption('개봉 가능')
-                                if st.button('편지 읽기',key='read_'+ident,use_container_width=True):
+                                st.markdown(letter_paper(l,preview=True),unsafe_allow_html=True)
+                                st.caption(l['name']+' · '+l['unlock']+' · 봉인 해제')
+                                if st.button('확대해서 읽기',key='read_'+ident,use_container_width=True):
                                     st.session_state['_reading_letter']=ident
-                            else:st.caption('봉인 중')
+                                    st.rerun(scope='fragment')
+                            else:
+                                st.image(envelope_image(),use_container_width=True)
+                                st.markdown('**'+esc(l['title'])+'**')
+                                st.caption(l['name']+' · '+l['unlock']+' · 봉인 중')
                             if l['author']==user['id'] and st.button('삭제',key='ld'+ident):delete_item('letters',ident)
-            selected=st.session_state.get('_reading_letter')
-            for ident,l in visible:
-                if selected==ident and l['unlock']<=str(TODAY):
-                    st.divider()
-                    st.markdown('### '+esc(l['title']))
-                    st.write(l['text'])
 
 @st.dialog('알림',width='large')
 def open_notifications():
@@ -564,7 +579,11 @@ try:
             if c3.button('가족 소식',use_container_width=True):news_dialog()
         upcoming=sorted([e for e in data.get('events',{}).values() if e['date']>=str(TODAY)],key=lambda e:e['date'])
         if upcoming:st.caption('다음 일정 · '+upcoming[0]['date']+' · '+upcoming[0]['title'])
-        st.button('가족 소식 새로고침',on_click=refresh_family,key='home_refresh')
+        if st.button('가족 소식 새로고침',key='home_refresh',icon=':material/refresh:'):
+            refresh_family()
+            with st.spinner('가족 소식을 불러오는 중이에요…'):
+                family_name,data,members=family_data(user)
+            st.toast('최신 가족 소식을 불러왔어요.',icon='✅')
 
     elif page=='가족 활동':
         section=st.segmented_control('함께 나누기',['가족 메모','버킷리스트','미래 편지'],default='가족 메모',selection_mode='single',label_visibility='collapsed',key='activity_section')
