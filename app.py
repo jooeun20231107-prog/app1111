@@ -669,23 +669,21 @@ try:
             day_events_dialog()
 
     elif page=='추억 보관함':
-        if st.button('새 추억 남기기',icon=':material/add_photo_alternate:',use_container_width=True) or st.session_state.get('_memory_open'):
-            st.session_state['_memory_open']=True
-            with st.form('memory'):
-                title=st.text_input('추억 제목',max_chars=150)
-                when=st.date_input('추억 날짜',value=TODAY)
-                text=st.text_area('추억 이야기',max_chars=3000)
-                photo=st.file_uploader('사진 (JPG·PNG·WEBP, 10MB 이하)',['jpg','jpeg','png','webp'])
-                if st.form_submit_button('추억 저장'):
-                    if not title.strip() or not photo:st.warning('제목과 사진을 선택해 주세요.')
-                    elif photo.size>10*1024*1024:st.warning('사진은 10MB 이하로 올려 주세요.')
-                    else:
-                        try:
-                            from PIL import ImageOps
-                            Image.MAX_IMAGE_PIXELS=25000000
-                            im=ImageOps.exif_transpose(Image.open(photo));im.thumbnail((1400,1400));im=im.convert('RGB');buf=io.BytesIO();im.save(buf,'JPEG',quality=82)
-                            save_item('memories',{'title':title.strip(),'date':str(when),'text':text.strip(),'photo':base64.b64encode(buf.getvalue()).decode()},('memory',5))
-                        except (OSError,ValueError,Image.DecompressionBombError):st.error('사진을 읽지 못했습니다. 다른 사진으로 시도해 주세요.')
+        with st.form('memory'):
+            title=st.text_input('추억 제목',max_chars=150)
+            when=st.date_input('추억 날짜',value=TODAY)
+            text=st.text_area('추억 이야기',max_chars=3000)
+            photo=st.file_uploader('사진 (JPG·PNG·WEBP, 10MB 이하)',['jpg','jpeg','png','webp'])
+            if st.form_submit_button('추억 저장'):
+                if not title.strip() or not photo:st.warning('제목과 사진을 선택해 주세요.')
+                elif photo.size>10*1024*1024:st.warning('사진은 10MB 이하로 올려 주세요.')
+                else:
+                    try:
+                        from PIL import ImageOps
+                        Image.MAX_IMAGE_PIXELS=25000000
+                        im=ImageOps.exif_transpose(Image.open(photo));im.thumbnail((1400,1400));im=im.convert('RGB');buf=io.BytesIO();im.save(buf,'JPEG',quality=82)
+                        save_item('memories',{'title':title.strip(),'date':str(when),'text':text.strip(),'photo':base64.b64encode(buf.getvalue()).decode()},('memory',5))
+                    except (OSError,ValueError,Image.DecompressionBombError):st.error('사진을 읽지 못했습니다. 다른 사진으로 시도해 주세요.')
         filter_date=st.checkbox('날짜로 찾기')
         day=st.date_input('확인할 날짜',value=TODAY) if filter_date else None
         for ident,m in sorted(data.get('memories',{}).items(),key=lambda kv:kv[1]['date'],reverse=True):
