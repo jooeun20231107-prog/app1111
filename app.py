@@ -102,6 +102,12 @@ header[data-testid="stHeader"]{background:transparent}#MainMenu,footer{visibilit
 [data-testid="stTextArea"] [data-testid="stInputInstructions"] {
     display: none !important;
 }
+
+/* Hide keyboard submission hints under single-line inputs too. */
+[data-testid="stTextInput"] [data-testid="InputInstructions"],
+[data-testid="stTextInput"] [data-testid="stInputInstructions"] {
+    display: none !important;
+}
 </style>'''
 st.markdown(CSS, unsafe_allow_html=True)
 
