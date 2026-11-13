@@ -454,9 +454,12 @@ try:
                 card(m['name'],f'{mood.get("mood","아직 소식이 없어요")}  {mood.get("message","")}')
             with st.popover('내 기분 남기기'):
                 with st.form('mood'):
-                    mood=st.selectbox('오늘의 기분',['행복함','평온함','피곤함','속상함','설렘','걱정됨'])
-                    msg=st.text_input('짧은 메시지',max_chars=120)
-                    if st.form_submit_button('기분 저장'): save_item('moods',{'mood':mood,'message':msg},itemid=f'{TODAY}:{user["id"]}')
+                    mood=st.selectbox('가까운 감정 고르기',['행복함','평온함','피곤함','속상함','설렘','걱정됨','뿌듯함','감사함','신남','편안함','기대됨','그리움','외로움','서운함','답답함','불안함','화남','우울함','무기력함','혼란스러움','복잡한 마음','그저 그럼'])
+                    custom_mood=st.text_input('내 감정을 직접 표현하기',max_chars=80,placeholder='예: 기쁘면서도 아쉬워 / 이유 없이 마음이 복잡해')
+                    st.caption('직접 적으면 위에서 고른 감정 대신 이 표현이 저장돼요.')
+                    msg=st.text_input('함께 전하고 싶은 말 (선택)',max_chars=120)
+                    if st.form_submit_button('기분 저장'):
+                        save_item('moods',{'mood':custom_mood.strip() or mood,'message':msg},itemid=f'{TODAY}:{user["id"]}')
 
         @st.dialog('오늘의 질문')
         def question_dialog():
