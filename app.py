@@ -628,6 +628,24 @@ try:
             if st.button('내 기분 남기기',key='detail_open_1_'+'1'):detail_panel_1()
         @st.dialog('오늘의 질문')
         def question_dialog():
+            if st.session_state.get('question_history_view',False):
+                st.subheader('지난 질문과 답변')
+                if st.button('오늘의 질문으로',key='question_history_back'):
+                    st.session_state['question_history_view']=False
+                    st.rerun(scope='fragment')
+                answers=data.get('answers',{})
+                if not any(a.get('date')!=str(TODAY) for a in answers.values()):
+                    st.caption('아직 지난 질문에 남긴 답변이 없어요.')
+                for a in sorted(answers.values(),key=lambda x:x['created'],reverse=True):
+                    if a['date']!=str(TODAY):
+                        card(f'{a["date"]} · {a["name"]}',a['question']+'\n'+a['text'])
+                        if a['author']==user['id']:
+                            with st.form('past'+a['date']+a['author']):
+                                edited=st.text_area('답변 수정',a['text'],max_chars=1000)
+                                if st.form_submit_button('수정 저장') and edited.strip():save_item('answers',{'text':edited.strip(),'date':a['date'],'question':a['question']},itemid=a['date']+':'+a['author'])
+                            if st.button('지난 답변 삭제',key='pastdel'+a['date']+a['author']):delete_item('answers',a['date']+':'+a['author'])
+
+                return
             q=QUESTIONS[(date(2000,TODAY.month,TODAY.day)-date(2000,1,1)).days]
             st.subheader('오늘의 질문');st.write(q)
             answers=data.get('answers',{});aid=f'{TODAY}:{user["id"]}'
@@ -640,18 +658,9 @@ try:
                 if a['date']==str(TODAY):
                     card(a['name'],a['text'])
                     if a['author']==user['id'] and st.button('답변 삭제',key='ad'+ident):delete_item('answers',ident)
-            @st.dialog('상세 보기')
-            def detail_panel_2():
-                for a in sorted(answers.values(),key=lambda x:x['created'],reverse=True):
-                    if a['date']!=str(TODAY):
-                        card(f'{a["date"]} · {a["name"]}',a['question']+'\n'+a['text'])
-                        if a['author']==user['id']:
-                            with st.form('past'+a['date']+a['author']):
-                                edited=st.text_area('답변 수정',a['text'],max_chars=1000)
-                                if st.form_submit_button('수정 저장') and edited.strip():save_item('answers',{'text':edited.strip(),'date':a['date'],'question':a['question']},itemid=a['date']+':'+a['author'])
-                            if st.button('지난 답변 삭제',key='pastdel'+a['date']+a['author']):delete_item('answers',a['date']+':'+a['author'])
-
-            if st.button('지난 질문과 답변',key='detail_open_2_'+'2'):detail_panel_2()
+            if st.button('지난 질문과 답변',key='detail_open_2_2'):
+                st.session_state['question_history_view']=True
+                st.rerun(scope='fragment')
         @st.dialog('가족 소식')
         def news_dialog():
             upcoming=sorted([x for x in data.get('events',{}).values() if x['date']>=str(TODAY)],key=lambda x:x['date'])[:3]
