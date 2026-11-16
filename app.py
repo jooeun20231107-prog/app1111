@@ -240,6 +240,7 @@ def navigate(label):
 
 def refresh_family():
     st.session_state.pop('_family_snapshot',None)
+    st.session_state.pop('_screen_auth',None)
 
 
 # Every mutation authenticates server-side and locks the family row. Never accept a client-supplied family ID.
@@ -536,8 +537,27 @@ if not user:
     st.stop()
 
 # Account creation and family connection are distinct steps. Pending state survives logout.
+# Re-read membership: joining a family can invalidate the cached family ID.
+user=session_user(st.session_state.get('token'))
+if not user:
+    st.session_state.pop('_screen_auth',None)
+    st.warning('로그인이 만료되었습니다. 다시 로그인해 주세요.')
+    st.stop()
 with db() as c:
-    pending=c.execute('SELECT data FROM public.lumora_families WHERE id=%s',(user['family'],)).fetchone()[0].get('onboarding',False)
+    onboarding_row=c.execute('SELECT data FROM public.lumora_families WHERE id=%s',(user['family'],)).fetchone()
+if onboarding_row is None:
+    refresh_family()
+    st.error('가족 정보를 찾을 수 없습니다. 로그아웃한 뒤 다시 로그인해 주세요.')
+    if st.button('로그아웃하고 다시 로그인',key='recover_missing_family'):
+        token=st.session_state.get('token')
+        if token:
+            with db() as c:
+                c.execute('DELETE FROM public.lumora_sessions WHERE token=%s',(digest(token),))
+        st.session_state.pop('token',None)
+        cookies.remove('lumora_session')
+        st.rerun()
+    st.stop()
+pending=bool((onboarding_row[0] or {}).get('onboarding',False))
 if pending:
     st.markdown('<div class="brand">LUMORA</div>',unsafe_allow_html=True)
     st.subheader('가족과 연결하기')
