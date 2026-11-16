@@ -635,8 +635,9 @@ try:
             for m in members:
                 mood=moods.get(f'{TODAY}:{m["id"]}',{})
                 card(m['name'],f'{mood.get("mood","아직 소식이 없어요")}  {mood.get("message","")}')
-            @st.dialog('상세 보기')
-            def detail_panel_1():
+            if st.button('내 기분 남기기',key='detail_open_1_1'):
+                st.session_state['mood_edit_view']=True
+            if st.session_state.get('mood_edit_view',False):
                 with st.form('mood'):
                     mood=st.selectbox('가까운 감정 고르기',['행복함','평온함','피곤함','속상함','설렘','걱정됨','뿌듯함','감사함','신남','편안함','기대됨','그리움','외로움','서운함','답답함','불안함','화남','우울함','무기력함','혼란스러움','복잡한 마음','그저 그럼'])
                     custom_mood=st.text_input('내 감정을 직접 표현하기',placeholder='예: 기쁘면서도 아쉬워 / 이유 없이 마음이 복잡해')
@@ -645,7 +646,6 @@ try:
                     if st.form_submit_button('기분 저장'):
                         save_item('moods',{'mood':custom_mood.strip() or mood,'message':msg},itemid=f'{TODAY}:{user["id"]}')
 
-            if st.button('내 기분 남기기',key='detail_open_1_'+'1'):detail_panel_1()
         @st.dialog('오늘의 질문')
         def question_dialog():
             if st.session_state.get('question_history_view',False):
